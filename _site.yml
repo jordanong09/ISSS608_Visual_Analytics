@@ -15,7 +15,7 @@ navbar:
     - text: "Take-Home Exercise"
       menu:
       - text: "Take-Home Exercise 1"
-        href: "THE1.html"
+        href: th_ex1/THE_1.html
       - text: "Take-Home Exercise 2"
         href: "DataViz2.htm"
       - text: "Take-Home Exercise 3"

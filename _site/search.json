@@ -13,21 +13,7 @@
       "description": "Welcome to the website! Hope you will enjoy the visuals I created!\n",
       "author": [],
       "contents": "\r\nThis website is a collection of all the exercises and assignments\r\nthat are required under ISSS608 Visual Analytics and Applications.\r\nIf you have any feedback or need any clarification, you may contact\r\nJordan at jordan.ong.2021@mitb.smu.edu.sg.\r\nI hope you enjoy the website. Stay Safe!\r\n\r\n\r\n\r\n",
-      "last_modified": "2022-04-19T19:30:52+08:00"
-    },
-    {
-      "path": "THE_1.html",
-      "title": "Take-Home Exercise 1",
-      "description": "Creating data visualisation beyond default\n",
-      "author": [
-        {
-          "name": "Ong Zhi Rong Jordan",
-          "url": "https://example.com/norajones"
-        }
-      ],
-      "date": "`r Sys.Date()`",
-      "contents": "\r\n\r\nContents\r\nSet up R\r\nStudio\r\nInstall\r\nnew libraries and load the libraries we will use\r\n\r\nStatistics is the practice of using data from a sample to\r\nmake inferences about some broader population of interest. This\r\nclass focuses on using linear and logistic models built from a sample of\r\ndata to learn about relationships in the broader population and to make\r\npredictions.\r\nSet up R Studio\r\nA couple reminders from the R\r\nBasics document. Go to Tools –> Global Options. On the General\r\ntab, next to Save workspace to .RData on exit, choose\r\nNever and uncheck the box next to Restore .Rdata into\r\nworkspace at startup. You can also go to the Appearance tab to\r\ncustomize the look of R Studio. Some people like black screens better\r\nthan white.\r\nSave this file to somewhere OTHER THAN YOUR DOWNLOADS\r\nFOLDER! Save often.\r\nInstall\r\nnew libraries and load the libraries we will use\r\nWe need to install any new packages we plan to load in an R markdown\r\ndocument. Once installed, you won’t have to install them again. Today,\r\nwe need to install the tidyverse and\r\nfueleconomy packages. You can either go to the Packages tab\r\nand click Install. Type tidyverse fueleconomy\r\n(separated by a space) and follow the prompts. Or else, in the\r\nconsole, type\r\ninstall.packages(\"tidyverse\", \"fueleconomy\").\r\nThen you load the libraries by running the following piece of code.\r\nYou need to do this in every R markdown file where you use\r\nfunctions or datasets from these package. We will get into the habit of\r\nputting these at the very top of our documents. This will be one of the\r\nonly documents where I do not have all the libraries listed at the top.\r\nAlso note that I’ve added warning=FALSE, message=FALSE to\r\nthe code chunk options, next to the r. This will prevent\r\nmessages and warnings from being printed out.\r\n\r\n\r\nlibrary(tidyverse) #for plotting and summarizing\r\nlibrary(fueleconomy) #for the dataset\r\n\r\n\r\n\r\n\r\nhello world\r\n\r\n\r\n\r\n\r\n",
-      "last_modified": "2022-04-20T11:06:16+08:00"
+      "last_modified": "2022-04-24T13:03:30+08:00"
     }
   ],
   "collections": []
