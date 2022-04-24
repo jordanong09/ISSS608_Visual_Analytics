@@ -1,0 +1,206 @@
+---
+title: "Take-Home Exercise 2"
+description: |
+  Data Makeover
+author:
+  - name: Ong Zhi Rong Jordan 
+    url: https://example.com/norajones
+date: "`r Sys.Date()`"
+output: 
+  distill::distill_article:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      include = TRUE,
+                      warning = FALSE,
+                      message = FALSE)
+
+# Learn more about creating websites with Distill at:
+# https://rstudio.github.io/distill/website.html
+
+```
+
+### Original Visualisation
+
+The original visualization was created by my fellow classmate Huang Anni using the Vast Challenge 2022 data set. There were very good aesthetics and clarity on the graph but also some room of improvement. I will share my following observations and how I would improve the visualization.
+
+![Original Visualization by Huang Anni.](images/graph.PNG)
+
+### Good Pointers
+
+#### Colours
+The author explored different colours to group the different elements. Density Plot and Violin Plot colours were well thought off to provide the adequate visualization to the users to identify the different groups.
+
+#### Text
+Annotation in graph provided a summary of the outcome derived from the statistical graph.
+
+#### Additional Details
+Additional details such as quantile and mean was plotted on the graph to enhance the level of details in the visualisation.
+
+### Improvements
+
+#### Y-Axis Labels
+Most Y Axis labels are placed horizontally which is not ideal for visualisation. 
+
+#### Axis Labels Title
+The Axis labels are inconsistent (smaller case and not in proper english). To solve this issue, we will have to rename the column before plotting or to manually change the axis titles.
+
+#### Breaks and Labels
+For the box plot, the X axis were cramped up and therefore not visually aesthetics. One should either facet and ensure the x axis are evenly spread out or to plot all of the graph in one frame. 
+
+#### Additional Details
+More details could be added to some graph to improve the visualisation (e.g having fonts to show the values)
+
+### Remake of Visualisation
+
+```{r include=FALSE}
+packages = c('tidyverse', 'ggdist', 'ggridges',
+             'patchwork', 'ggthemes', 'hrbrthemes',
+             'ggrepel', 'ggforce', 'gridExtra')
+for(p in packages){
+  if(!require(p, character.only = T)){
+    install.packages(p)
+  }
+  library(p, character.only = T)
+}
+
+```
+
+#### Renaming of Columns and Values
+To ensure the axes are displayed properly, we first need to rename the columns so the default title would be right without any adjustments.
+
+``` {r eval=FALSE}
+participants <- participants_data %>%
+  rename('Participant_ID' = 'participantId', 
+         'Household_Size' = 'householdSize', 
+         'Have_Kids' = 'haveKids', 
+         'Age' = 'age', 
+         'Education_Level' = 'educationLevel', 
+         'Interest_Group' = 'interestGroup', 
+         'Joviality' = 'joviality')
+
+participants$Education_Level [participants$Education_Level == "HighSchoolOrCollege" ] <- "High School Or College"
+
+head (participants)
+```
+
+``` {r include=FALSE}
+
+participants <- readRDS(file = "data/participants.rds")
+
+```
+
+#### 1st Visualisation Remake
+
+The density plot could have been better my separating the colors based on quantile instead. This will allow the reader to understand the different joviality quantile based on the different education level for statistic conclusion. The titles are also more properly positioned to provide better aesthetics to the reader. 
+
+``` {r}
+ggplot(participants, aes(x = Joviality, y = Education_Level, fill = factor(stat(quantile)))) +
+  stat_density_ridges(geom = "density_ridges_gradient", 
+                      calc_ecdf = TRUE,
+                      quantiles = 4, 
+                      quantile_lines = TRUE) +
+  scale_fill_viridis_d(name = "Quartiles") +
+  labs(y= 'Education Level', x= 'Joviality',
+       title = "Density of Joviality",subtitle="Group by Education Level") +
+  theme(axis.title.y= element_text(angle=0), axis.ticks.x= element_blank(),
+       axis.line= element_line(color= 'grey'), axis.title = element_text(face="bold"), plot.title=element_text(hjust=0.5),
+       plot.subtitle=element_text(hjust=0.5))
+
+```
+
+#### 2nd Visualisation Remake
+For the 2nd Visualisation, I added a average line for both the density plot to identify the average joviality based on age group to understand whether there is a higher density of people above the average joviality or lower than the average. I adjusted the axis title placing and font to provide better visualisation of the axis label.
+
+``` {r}
+old_mean <- participants %>%
+  group_by(age_state) %>%
+  summarise_at(vars(Joviality), list(Joviality_New = mean))
+
+p1 = ggplot(data=subset(participants,age_state=='Young'), 
+       aes(x = Joviality)) + 
+  geom_density() +
+  geom_vline(aes(xintercept = old_mean$Joviality_New[2]),
+             linetype= 'dashed',
+             color= '#f08080',
+             size= .5) +
+  labs(y= 'Density', x= 'Joviality',
+       title = "Density of Old People \nbased on Joviality") +
+  theme(axis.title.y= element_text(angle=0, color = "red", size = 8), axis.ticks.x= element_blank(), axis.title.x = element_text(color="red", size=8), axis.line= element_line(color= 'grey'), plot.title = element_text(size = 10, face="bold", hjust = 0.5))
+
+
+p2 = ggplot(data=subset(participants,age_state=='Old'), 
+       aes(x = Joviality)) + 
+  geom_density() +
+  geom_vline(aes(xintercept = old_mean$Joviality_New[1]),
+             linetype= 'dashed',
+             color= '#f08080',
+             size= .5) +
+  labs(y= 'Density', x= 'Joviality',
+       title = "Density of Young People \nbased on Joviality") +
+  theme(axis.title.y= element_text(angle=0, color = "red", size = 8), axis.ticks.x= element_blank(), axis.title.x = element_text(color="red", size=8), axis.line= element_line(color= 'grey'), plot.title = element_text(size = 10, face="bold", hjust = 0.5))
+
+
+
+p3 = ggplot(data=participants,
+aes(x= Joviality,
+fill = age_state)) +
+geom_density(alpha=0.2) +
+  annotate("text", x = 0.7, y = 1.2, label = "Young people tend\n to be happier",size=3,color='#4682B4') + 
+  labs(y= 'Density', x= 'Joviality',
+       title = "Density of Population \nbased on Joviality") +
+  theme(axis.title.y= element_text(angle=0, color = "red", size = 8), axis.ticks.x= element_blank(), axis.title.x = element_text(color="red", size=8), axis.line= element_line(color= 'grey'), plot.title = element_text(size = 10, face="bold", hjust = 0.5))
+
+(p1 / p2) | (p3+
+  scale_y_continuous(limits=c(0.0, 1.2)) + scale_fill_discrete(name = "Age State"))
+
+
+```
+
+#### 3rd Visualisation Remake
+Instead of using box plot to visualise the distribution of age by kids status, I proposed to use a histogram instead.
+
+``` {r}
+
+ggplot(participants, aes(Age, fill = Have_Kids)) +
+  geom_histogram(colour='black',size=1) + 
+  scale_fill_manual(values = c("#00AFBB", "#E7B800"), name = "Have Kids?") + 
+  labs(y= 'No. of\nResidents', x= 'Age',
+       title = "Distribution of Residents' Age", subtitle = "Based on Resident with/without Kids") +
+  theme(axis.title.y= element_text(angle=0, face="bold"),axis.title.x= element_text(face="bold"), axis.ticks.x= element_blank(),
+        panel.background= element_blank(), axis.line= element_line(color= 'grey'))
+```
+
+#### 4th Visualisation Remake
+
+For the final visualisation remake, I ammended the title and added the subtitle to prevent title cluttering. I also adjusted the axis labels and rename the axis column name. 
+
+``` {r}
+devtools::install_github("psyteachr/introdataviz")
+ggplot(participants, 
+       aes(x = Education_Level, 
+           y = Age, 
+           fill = Have_Kids)) + 
+  introdataviz::geom_split_violin(alpha = .4, 
+                                  trim = FALSE) + 
+  geom_boxplot(width = .2, 
+               alpha = .6, 
+               fatten = NULL, 
+               show.legend = FALSE) + 
+  stat_summary(fun.data = "mean_se", 
+               geom = "pointrange", 
+               show.legend = F, 
+               position = position_dodge(.175)) + 
+  scale_y_continuous(breaks = seq(0, 80, 20), 
+                      limits = c(0, 80)) + 
+  scale_fill_brewer(palette = "Dark2", 
+                    name = "Has Child")+
+  labs(y= 'Age', x= 'Education Level',
+       title = "Distribution of Residents' Age", subtitle = "Based on Resident with/without Kids and Education Level") + 
+  theme(axis.title.y= element_text(angle=0, face="bold"),axis.title.x= element_text(face="bold"), axis.ticks.x= element_blank(),
+        panel.background= element_blank(), axis.line= element_line(color= 'grey'))
+
+```
