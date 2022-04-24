@@ -1,0 +1,47 @@
+---
+title: "Ong Zhi Rong Jordan"
+image: "images/jordan.jpeg"
+links:
+  - label: LinkedIn
+    url: "https://linkedin.com/"
+  - label: Twitter
+    url: "https://twitter.com/"
+  - label: GitHub
+    url: "https://github.com/"
+  - label: Email
+    url: "jordan.ong.2021@mitb.smu.edu.sg"
+output:
+  postcards::trestles
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+## Bio
+
+I am a full-time student taking a Master of IT in Business (Analytics
+Track) in Singapore Management University. Currently I am working for
+MINDEF as a Project Officer. Looking for more opportunities to explore
+my data analytics skills and build a strong network within the
+community!
+
+## Education
+
+**Singapore Management University** \| Singapore, SG
+
+Master of IT in Business (MITB) Analytics (AT) Track \| January 2022 - Present
+
+**Nanyang Technological University** \| Singapore, SG
+
+B.E. in Computer Engineering \| Aug 2013 - Aug 2016
+
+## Experience
+
+**Google Brain** \| Principal Investigator \| January 2018 - Present
+
+**Netflix** \| Research Scientist \| June 2014 - December 2017
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+

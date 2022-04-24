@@ -1,0 +1,21 @@
+---
+title: "Jordan's Visual Analytics Site"
+description: |
+  Welcome to the website! Hope you will enjoy the visuals I created!
+site: distill::distill_website
+---
+
+This website is a collection of all the exercises and assignments that are required under ISSS608 Visual Analytics and Applications.
+
+If you have any feedback or need any clarification, you may contact Jordan at [jordan.ong.2021\@mitb.smu.edu.sg](mailto:jordan.ong.2021@mitb.smu.edu.sg){.email}.
+
+I hope you enjoy the website. Stay Safe!
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+# Learn more about creating websites with Distill at:
+# https://rstudio.github.io/distill/website.html
+
+```
+

@@ -1,0 +1,32 @@
+name: "ISSS608"
+title: "Distill for R Markdown"
+output_dir: "_site"
+navbar:
+  logo:
+    image: images/logo.png
+    href: https://www.rstudio.com
+  left:
+    - text: "DataViz Makeover"
+      menu:
+      - text: "DataViz Makeover 1"
+        href: "DataViz1.html"
+      - text: "DataViz Makeover 2"
+        href: "DataViz2.htm"
+    - text: "Take-Home Exercise"
+      menu:
+      - text: "Take-Home Exercise 1"
+        href: "THE1.html"
+      - text: "Take-Home Exercise 2"
+        href: "DataViz2.htm"
+      - text: "Take-Home Exercise 3"
+        href: "DataViz1.html"
+      - text: "Take-Home Exercise 4"
+        href: "DataViz2.htm"
+      - text: "Take-Home Exercise 5"
+        href: "DataViz2.htm"
+  right:
+    - text: "Home"
+      href: index.html
+    - text: "About"
+      href: about.html
+output: distill::distill_article
