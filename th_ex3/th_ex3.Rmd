@@ -1,0 +1,68 @@
+---
+title: "Take-Home Exercise 3"
+description: |
+  Putting Visual Analytics into Practical Use
+author:
+  - name: Ong Zhi Rong Jordan 
+    url: https://example.com/norajones
+date: "`r Sys.Date()`"
+output: 
+  distill::distill_article:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      include = TRUE,
+                      warning = FALSE,
+                      message = FALSE)
+
+# Learn more about creating websites with Distill at:
+# https://rstudio.github.io/distill/website.html
+
+```
+
+```{r include=FALSE}
+packages = c('tidyverse', 'ggdist', 'ggridges',
+             'patchwork', 'ggthemes', 'hrbrthemes',
+             'ggrepel', 'ggforce', 'gridExtra')
+for(p in packages){
+  if(!require(p, character.only = T)){
+    install.packages(p)
+  }
+  library(p, character.only = T)
+}
+
+```
+
+``` {r}
+financeJ <- read_csv(file = "rawdata/FinancialJournal.csv")
+participantsD <- read_csv(file = "rawdata/Participants.csv")
+
+head (financeJ)
+head (participantsD)
+```
+``` {r}
+
+financeJ_1 <- financeJ %>% #load the financeJ data table
+  group_by(category, timestamp)%>% 
+  summarise(amount = round(sum(amount),2)) %>% #sum all the amount based on their ID and Category rounding off to 2 decimal place
+  pivot_wider(names_from = "category",values_from = "amount") #%>% #pivot the table to have the categories in columns instead of rows
+financeJ_1[is.na(financeJ_1)] = 0
+
+financeJ_Final <- financeJ_1 %>%
+  mutate(Expenses = Education + Food + Recreation + Shelter + RentAdjustment) %>%
+  select(timestamp,Wage,Expenses)
+head (financeJ_Final)
+```
+
+
+``` {r}
+
+financeJ_Final %>%
+  ggplot(aes(x=timestamp, y = Expenses)) +
+  geom_line(color="#69b3a2") +
+  geom_hline(yintercept = mean(Expenses), color = "orange", size = 0.5) +
+  theme_ipsum()
+```
