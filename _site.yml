@@ -24,6 +24,10 @@ navbar:
         href: "DataViz2.htm"
       - text: "Take-Home Exercise 5"
         href: "DataViz2.htm"
+    - text: "In-Class Exercise"
+      menu:
+      - text: "In-Class Exercise 4"
+      - href: In_Class_Ex/in_class_ex04.html
   right:
     - text: "Home"
       href: index.html

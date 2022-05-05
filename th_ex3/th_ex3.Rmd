@@ -43,7 +43,10 @@ participantsD <- read_csv(file = "rawdata/Participants.csv")
 head (financeJ)
 head (participantsD)
 ```
+
+
 ``` {r}
+financeJ$timestamp <- (strptime(financeJ$timestamp , "%Y-%m-%d"))
 
 financeJ_1 <- financeJ %>% #load the financeJ data table
   group_by(category, timestamp)%>% 
@@ -57,8 +60,42 @@ financeJ_Final <- financeJ_1 %>%
 head (financeJ_Final)
 ```
 
+``` {r merge_participants}
 
-``` {r}
+age_group1 <- 18:25 #create a vector of age
+age_group2 <- 26:30
+age_group3 <- 31:35
+age_group4 <- 36:40
+age_group5 <- 41:45
+age_group6 <- 46:50
+age_group7 <- 51:55
+age_group8 <- 56:60
+
+participants_final <- participantsD %>%
+  mutate (agegroup= case_when(
+    age %in% age_group1 ~ "18-25",
+    age %in% age_group2 ~ "26-30",
+    age %in% age_group3 ~ "31-35",
+    age %in% age_group4 ~ "36-40",
+    age %in% age_group5 ~ "41-45",
+    age %in% age_group6 ~ "46-50",
+    age %in% age_group7 ~ "51-55",
+    age %in% age_group8 ~ "56-60")) %>%
+  select (participantId,agegroup)
+
+finance_Part <- financeJ %>%
+  group_by(participantId,category, timestamp)%>% 
+  summarise(amount = round(sum(amount),2))
+
+final <- merge(participants_final,finance_Part,by=c("participantId","participantId"),all.x=T)
+
+final_T <- final %>%
+  pivot_wider(names_from = "category",values_from = "amount")
+final_T[is.na(final_T)] = 0
+
+```
+
+``` {r draw_line_graph}
 
 financeJ_Final %>%
   ggplot(aes(x=timestamp, y = Expenses)) +
