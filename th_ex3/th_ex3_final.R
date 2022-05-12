@@ -54,7 +54,8 @@ scatter_data <- scatter_data %>%
   mutate(Expenses = -(Education + Food + Recreation + Shelter)) %>%
   mutate(Income = RentAdjustment + Wage) %>%
   mutate (Savings = Income - Expenses) %>%
-  mutate (PctSavings = (Savings/Income) *100)
+  mutate (PctSavings = (Savings/Income) *100) %>%
+  mutate (ExpPerc = (trunc(rank(Expenses)) / length(Expenses)) * 100)
 
 
 p <- ggplot (scatter_data, aes (Income, Expenses, color=agegroup))
@@ -62,7 +63,7 @@ p <- ggplot (scatter_data, aes (Income, Expenses, color=agegroup))
 p <- p + scale_x_continuous(expand = c(0, 0), limits = c(0, 260000)) 
 p <- p + scale_y_continuous(expand = c(0, 0), limits = c(0, 40000))
 
-p <- p + labs(x="INCREASE OF INCOME",y="INCREASE OF EXPENDITURE")
+p <- p + labs(x="INCOME",y="EXPENDITURE")
 p <- p + theme(axis.title.x = element_text(hjust = 0, vjust=4, colour="darkgrey",size=10,face="bold"))
 p <- p + theme(axis.title.y = element_text(hjust = 0, vjust=0, colour="darkgrey",size=10,face="bold"))
 
@@ -85,31 +86,16 @@ p <- p + theme(panel.border = element_rect(colour = "lightgrey", fill=NA, size=3
 p <- p + geom_hline(yintercept=20000, color = "lightgrey", size=1.5)
 p <- p + geom_vline(xintercept=130000, color = "lightgrey", size=1.5)
 
-p <- p + annotation_custom(
-  grob = linesGrob(arrow=arrow(type="open", ends="last", length=unit(2,"mm")), 
-                   gp=gpar(col="lightgrey", lwd=4)), 
-  xmin = -2, xmax = -2, ymin = 25, ymax = 40
-)
-p <- p + annotation_custom(
-  grob = linesGrob(arrow=arrow(type="open", ends="last", length=unit(2,"mm")), 
-                   gp=gpar(col="lightgrey", lwd=4)), 
-  xmin = 100000, xmax = 120000, ymin = -10, ymax = -20
-)
-
-
 
 p <- p + geom_point() 
 
-gt = ggplot_gtable(ggplot_build(p))
-gt$layout$clip[gt$layout$name=="panel"] = "off"
-grid.draw(gt)
-
-
-p <- p + geom_label(aes(x = 25, y = 97, label = "CALLENGERS"), 
+p <- p + geom_label(aes(x = (130000/2), y = 38800, label = "CALLENGERS"), 
                     label.padding = unit(2, "mm"),  fill = "lightgrey", color="white")
-p <- p + geom_label(aes(x = 75, y = 97, label = "LEADERS"), 
+p <- p + geom_label(aes(x = 195000, y = 38800, label = "LEADERS"), 
                     label.padding = unit(2, "mm"), fill = "lightgrey", color="white")
-p <- p + geom_label(aes(x = 25, y = 3, label = "NICHE PLAYERS"), 
+p <- p + geom_label(aes(x = (130000/2), y = 1200, label = "NICHE PLAYERS"), 
                     label.padding = unit(2, "mm"),  fill = "lightgrey", color="white")
-p <- p + geom_label(aes(x = 75, y = 3, label = "VISIONARIES"), 
+p <- p + geom_label(aes(x = 195000, y = 1200, label = "VISIONARIES"), 
                     label.padding = unit(2, "mm"), fill = "lightgrey", color="white")
+
+p
