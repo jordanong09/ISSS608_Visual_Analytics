@@ -23,10 +23,10 @@ knitr::opts_chunk$set(echo = TRUE,
 
 ```
 
-```{r include=FALSE}
-packages = c('tidyverse', 'ggdist', 'ggridges',
-             'patchwork', 'ggthemes', 'hrbrthemes',
-             'ggrepel', 'ggforce', 'gridExtra')
+```{r}
+packages = c('tidyverse', 'ggrepel', 'ggiraph', 'patchwork', 'plotly', 'hrbrthemes', 
+             'heatmaply', 'viridis','ggridges','binr', "trelliscopejs","zoo","ggthemes")
+
 for(p in packages){
   if(!require(p, character.only = T)){
     install.packages(p)
@@ -36,70 +36,203 @@ for(p in packages){
 
 ```
 
+
 ``` {r}
-financeJ <- read_csv(file = "rawdata/FinancialJournal.csv")
-participantsD <- read_csv(file = "rawdata/Participants.csv")
+financeJ <- readRDS(file = "data/financeJ.rds")
+participantsD <- readRDS(file = "data/participantsD.rds")
 
 head (financeJ)
 head (participantsD)
 ```
 
+``` {r}
+cuts <- bins(participantsD$age,target.bins = 7,minpts = 120)
+cuts$breaks <- bins.getvals(cuts)
+cuts$binct
+```
+
+``` {r}
+
+age_group1 <- 18:23 #create a vector of age
+age_group2 <- 24:29
+age_group3 <- 30:35
+age_group4 <- 36:42
+age_group5 <- 43:48
+age_group6 <- 49:54
+age_group7 <- 55:60
+
+participants_final <- participantsD %>%
+  mutate (agegroup= case_when(
+    age %in% age_group1 ~ "18-23",
+    age %in% age_group2 ~ "24-29",
+    age %in% age_group3 ~ "30-35",
+    age %in% age_group4 ~ "36-42",
+    age %in% age_group5 ~ "43-48",
+    age %in% age_group6 ~ "49-54",
+    age %in% age_group7 ~ "55-60")) %>%
+  select (participantId,agegroup)
+
+```
 
 ``` {r}
 financeJ$timestamp <- (strptime(financeJ$timestamp , "%Y-%m-%d"))
 
-financeJ_1 <- financeJ %>% #load the financeJ data table
-  group_by(category, timestamp)%>% 
-  summarise(amount = round(sum(amount),2)) %>% #sum all the amount based on their ID and Category rounding off to 2 decimal place
-  pivot_wider(names_from = "category",values_from = "amount") #%>% #pivot the table to have the categories in columns instead of rows
-financeJ_1[is.na(financeJ_1)] = 0
 
-financeJ_Final <- financeJ_1 %>%
-  mutate(Expenses = Education + Food + Recreation + Shelter + RentAdjustment) %>%
-  select(timestamp,Wage,Expenses)
-head (financeJ_Final)
+final <- merge(participants_final,financeJ,by=c("participantId","participantId"),all.x=T)
+
+final <- final %>%
+  mutate (Timestamp = as.Date(as.yearmon(timestamp), frac = 0)) %>%
+  rename('Participant_ID' = 'participantId')
+
 ```
 
-``` {r merge_participants}
+``` {r}
 
-age_group1 <- 18:25 #create a vector of age
-age_group2 <- 26:30
-age_group3 <- 31:35
-age_group4 <- 36:40
-age_group5 <- 41:45
-age_group6 <- 46:50
-age_group7 <- 51:55
-age_group8 <- 56:60
-
-participants_final <- participantsD %>%
-  mutate (agegroup= case_when(
-    age %in% age_group1 ~ "18-25",
-    age %in% age_group2 ~ "26-30",
-    age %in% age_group3 ~ "31-35",
-    age %in% age_group4 ~ "36-40",
-    age %in% age_group5 ~ "41-45",
-    age %in% age_group6 ~ "46-50",
-    age %in% age_group7 ~ "51-55",
-    age %in% age_group8 ~ "56-60")) %>%
-  select (participantId,agegroup)
-
-finance_Part <- financeJ %>%
-  group_by(participantId,category, timestamp)%>% 
-  summarise(amount = round(sum(amount),2))
-
-final <- merge(participants_final,finance_Part,by=c("participantId","participantId"),all.x=T)
-
-final_T <- final %>%
+data_plot <- final %>%
+  select(c("Timestamp","Participant_ID", "category","amount")) %>% #choose the columns to subset
+  group_by(Timestamp,category,Participant_ID)%>% 
+  summarise(amount = round(sum(amount),2)) %>%
   pivot_wider(names_from = "category",values_from = "amount")
-final_T[is.na(final_T)] = 0
+data_plot[is.na(data_plot)] = 0
+data_plot [3:8] <- abs(data_plot[3:8])
 
+data_plot <- data_plot %>%
+  mutate(Expenses = (Education + Food + Recreation + Shelter)) 
+
+trelis_plot <- data_plot %>%
+  select(c("Timestamp","Participant_ID","Expenses", "Wage"))
+
+```
+
+
+``` {r}
+ggplot(trelis_plot, aes(y = Expenses, x = (Timestamp))) +
+  geom_point() + geom_line() +
+  labs (y = "Total Expenses \n of the Month", x = 'Month', title = "Monthly Expenditure of Participant") + 
+  scale_x_date(date_breaks = "months",
+               date_labels = "%b") +
+  facet_trelliscope(~ Participant_ID, nrow = 2, ncol = 2, width = 800, as_plotly = TRUE, path = "trellis/", self_contained = TRUE)
+```
+
+``` {r}
+ggplot(trelis_plot, aes(y = Wage, x = (Timestamp))) +
+  geom_point() + geom_line() +
+  labs (y = "Total Wage \n of the Month", x = 'Month', title = "Monthly Wage of Participant") + 
+  scale_x_date(date_breaks = "months",
+               date_labels = "%b") +
+  facet_trelliscope(~ Participant_ID, nrow = 2, ncol = 2, width = 800, as_plotly = TRUE, path = "trellis1/")
+```
+
+
+``` {r}
+histo_plot <- final %>%
+  select(c("Participant_ID","category","amount","agegroup")) %>%
+  group_by(Participant_ID,category,agegroup) %>%
+  summarise (amount = round(sum(amount),2)) %>%
+  pivot_wider(names_from = "category",values_from = "amount")
+histo_plot[is.na(histo_plot)] = 0
+histo_plot [3:8] <- abs(histo_plot[3:8])
+
+
+histo_plot <- histo_plot %>%
+  mutate(Expenses = Education + Food + Recreation + Shelter) %>%
+  mutate(Income = RentAdjustment + Wage) %>%
+  mutate (Savings = Income - Expenses) %>%
+  mutate (PctSavings = round((Savings/Income) *100,0)) %>%
+  mutate(PctNeedsExpenses = round(((Education+Food+Shelter)/Income) *100,0))
+```
+
+
+``` {r}
+p <- ggplot(data=histo_plot, 
+            aes(x = PctSavings)) +
+  geom_vline(aes(xintercept = 20.5), color="red", linetype = "dashed", alpha = 0.3) +
+  annotate ("text", x=9, y = 0.5, label = "Participants with less than \n20% of Savings", size = 2.5, angle = 0,) +
+  geom_dotplot_interactive(              
+    aes(tooltip = agegroup,
+        data_id = agegroup),
+    stackgroups = TRUE,                  
+    binwidth = 1,                        
+    method = "histodot") +  
+  scale_y_continuous(NULL, breaks = NULL) +
+  scale_x_continuous(labels = c("0","20","40","60", "80", "100"),breaks = c(0,20,40,60,80,100)) +
+  theme_few() + labs (title = "Participants Savings in Percentage", x = "Savings (%)")
+
+
+p2 <- ggplot(data=histo_plot, 
+            aes(x = PctNeedsExpenses)) +
+  geom_vline(aes(xintercept = 49.5), color="blue", linetype = "dashed", alpha = 0.3) +
+    annotate ("text", x=70, y = 0.5, label = "Participants that spend more than \n50% of income on Needs", size = 2.5, angle = 0,) +
+  geom_dotplot_interactive(              
+    aes(tooltip = agegroup,
+        data_id = agegroup),
+    stackgroups = TRUE,                  
+    binwidth = 1,                        
+    method = "histodot") +  
+  scale_y_continuous(NULL, breaks = NULL) +
+  scale_x_continuous(labels = c("0","20","40","60", "80", "100"),breaks = c(0,20,40,60,80,100), limits = c(0,100)) +
+  theme_few() + labs (title = "Participants Expenses (Needs) in Percentage", x = "Expenses (%)")
+
+
+girafe(                               
+  code = print (p/p2),                             
+  width_svg = 8,                         
+  height_svg = 8)
 ```
 
 ``` {r draw_line_graph}
+heat_plot <- final %>%
+  select(c("timestamp","agegroup", "category","amount")) %>% #choose the columns to subset
+  group_by(timestamp,category,agegroup)%>% 
+  summarise(amount = round(sum(amount),2)) %>%
+  pivot_wider(names_from = "category",values_from = "amount")
+heat_plot[is.na(heat_plot)] = 0
+heat_plot [3:8] <- abs(heat_plot[3:8])
 
-financeJ_Final %>%
-  ggplot(aes(x=timestamp, y = Expenses)) +
-  geom_line(color="#69b3a2") +
-  geom_hline(yintercept = mean(Expenses), color = "orange", size = 0.5) +
-  theme_ipsum()
+heat_plot <- heat_plot %>%
+  mutate(Expenses = (Education + Food + Recreation + Shelter))
+heat_plot$Weekdays <- weekdays(heat_plot$timestamp)
+heat_plot$Month <- format(heat_plot$timestamp, "%b") 
+
+heat_plot_final <- heat_plot %>%
+  select(c("Month", "Weekdays", "agegroup", "Expenses")) %>%
+  group_by(Month,Weekdays,agegroup)%>% 
+  summarise(Expenses = round(mean(Expenses),2) )
 ```
+
+``` {r}
+
+g2 <- ggplot(heat_plot_final, 
+       aes(Month, 
+           Weekdays, 
+           fill = Expenses)) + 
+geom_tile(color = "white", 
+          size = 0.1) + 
+theme_tufte(base_family = "Helvetica") + 
+coord_equal() +
+scale_fill_gradient(name = "# of attacks",
+                    low = "sky blue", 
+                    high = "dark blue") +
+facet_wrap(~agegroup, nrow = 2) +
+labs(x = NULL, 
+     y = NULL, 
+     title = "Expenses by Weekday and Month")
+
+ggplotly(g2, tooltip = c("agegroup", "Expenses"))
+
+
+```
+
+
+``` {r}
+heat_plot_final %>%
+  split(.$agegroup) %>%
+  lapply(function(d) plot_ly(d, x = ~Weekdays, y = ~Month, z = heat_plot_final$Expenses, type = "heatmap")) %>%
+  lapply(function(l) layout(l,
+                            title = "Subplot: Expenses by Weekday and Month")) %>% 
+  subplot(nrows = 2, shareX = TRUE, shareY = TRUE) 
+
+
+
+```
+

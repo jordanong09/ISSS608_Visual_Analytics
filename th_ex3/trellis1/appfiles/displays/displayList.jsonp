@@ -1,0 +1,12 @@
+__loadDisplayList__ee674ca1([
+  {
+    "group": "common",
+    "name": "by_Participant_ID",
+    "desc": "Monthly Wage of Participant",
+    "n": 1011,
+    "height": 500,
+    "width": 800,
+    "updated": "2022-05-15 15:00:37",
+    "keySig": "18123171d26c257a836d15a4a608d2bb"
+  }
+])
