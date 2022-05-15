@@ -11,6 +11,27 @@ output:
     toc: true
     toc_float: true
 ---
+### Introduction
+
+The purpose of this take-home exercise, to reveal the economic of the city of Engagement, Ohio USA by using appropriate **static** and **interactive** statistical graphics methods.
+
+### Concept of Analysis
+
+For the analysis, we will explore both the Participants attributes and their financial background. We will first extract required dataset from the Participants.csv and subsequently perform a join to merge the two csv files.
+
+We will explore the following analysis: 
+
+- **Line and Bar Plot with Trelliscope**  
+  - Wage & Expenses of the different participants across the year
+  
+- **Ridge Plot**
+  - The quantile of Wage and Expenses across the different months
+
+- **Histo Dot Plot**
+  - To identify the number of participants that did not follow the 50/30/20 spending rule.
+
+- **Heat Map**
+  - Average Food and Recreation Expenses across the different age group
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,
@@ -22,6 +43,12 @@ knitr::opts_chunk$set(echo = TRUE,
 # https://rstudio.github.io/distill/website.html
 
 ```
+
+### Installing Required Libraries
+
+We need to install any new packages we plan to load in an R markdown document. The following libraries will be incorporated to construct the required interactive charts:
+
+To install and load the new packages every time we load the R project, we will execute the following code before commencing on the analysis and constructing of graphs. 
 
 ```{r}
 packages = c('tidyverse', 'ggrepel', 'ggiraph', 'patchwork', 'plotly', 'hrbrthemes', 
@@ -37,6 +64,12 @@ for(p in packages){
 ```
 
 
+### Data Preparation
+
+#### Importing of Dataset
+
+The dataset provided was retrieved from Vast Challenge 2022 and it consist of multiple csv files. For this exercise, we will only focus on two csv files mainly: `Participants.csv` and `FinancialJournal.csv`. To import the csv files, we will use the `read_csv` command instead of `read.csv` command to safeguard the integrity of the data.
+
 ``` {r}
 financeJ <- readRDS(file = "data/financeJ.rds")
 participantsD <- readRDS(file = "data/participantsD.rds")
@@ -45,13 +78,15 @@ head (financeJ)
 head (participantsD)
 ```
 
+#### Binning of Participant's Age Group
+
+To bin the participants age group evenly, the `binr` library is used. I set the target bins at 7 to generate 7 different grouping for the age group and subsequently create a vector to input a new age group column inside the data table.
+
 ``` {r}
 cuts <- bins(participantsD$age,target.bins = 7,minpts = 120)
 cuts$breaks <- bins.getvals(cuts)
 cuts$binct
-```
 
-``` {r}
 
 age_group1 <- 18:23 #create a vector of age
 age_group2 <- 24:29
@@ -71,8 +106,11 @@ participants_final <- participantsD %>%
     age %in% age_group6 ~ "49-54",
     age %in% age_group7 ~ "55-60")) %>%
   select (participantId,agegroup)
-
 ```
+
+#### Merging of the data table
+
+To have the agegroup in the finance data table, I use the `merge` function and set the participantId as the key for the merging. I then rename the column and create a year month timestamp using the `zoo` library.
 
 ``` {r}
 financeJ$timestamp <- (strptime(financeJ$timestamp , "%Y-%m-%d"))
@@ -85,6 +123,11 @@ final <- final %>%
   rename('Participant_ID' = 'participantId')
 
 ```
+
+
+#### Creating an Expenses Column
+
+Expenses is calculated using the different category (Education, Shelter, Food and Recreation). We will first pivot the table to insert them as column before mutating the expenses column.
 
 ``` {r}
 
@@ -99,30 +142,66 @@ data_plot [3:8] <- abs(data_plot[3:8])
 data_plot <- data_plot %>%
   mutate(Expenses = (Education + Food + Recreation + Shelter)) 
 
+```
+
+### Plotting of statistical graphs
+
+#### Line and Dot plot using trelliscope
+
+We will examine the participants Wage and Expenses individually using the interactive line and dot plot against all the different months. `Trelliscope` is used due to the large amount of participant to examine. From the chart, we are able to identify **at least 10% (131) of the participants** did not include their expenses after the first input in Mar 2022. The highest expenses for most participants occured in Mar 2022.
+
+``` {r}
+
 trelis_plot <- data_plot %>%
   select(c("Timestamp","Participant_ID","Expenses", "Wage"))
 
-```
-
-
-``` {r}
 ggplot(trelis_plot, aes(y = Expenses, x = (Timestamp))) +
   geom_point() + geom_line() +
   labs (y = "Total Expenses \n of the Month", x = 'Month', title = "Monthly Expenditure of Participant") + 
   scale_x_date(date_breaks = "months",
                date_labels = "%b") +
-  facet_trelliscope(~ Participant_ID, nrow = 2, ncol = 2, width = 800, as_plotly = TRUE, path = "trellis/", self_contained = TRUE)
+  facet_trelliscope(~ Participant_ID, nrow = 2, ncol = 2, width = 800, as_plotly = TRUE, path = "trellis/")
 ```
+
+#### Density Ridge Plot
+
+We will then examine the density ridge plot for Wage and Expenses by the different months to identify a trend. From the plot, we observe that the bottom quantile (0-5%) of Wage did not have any significant different throughout the year of recording. But the top 95% had a slight difference in the month of July and Oct. This might be due to the summer break in the United States that result in more youngster working in that period, increasing the Wage gained throughout the year. For the expenses, there is no significant observation throughout the year. We will zoom in later using the heatmap to identify the different Age Group expenditure. 
 
 ``` {r}
-ggplot(trelis_plot, aes(y = Wage, x = (Timestamp))) +
-  geom_point() + geom_line() +
-  labs (y = "Total Wage \n of the Month", x = 'Month', title = "Monthly Wage of Participant") + 
-  scale_x_date(date_breaks = "months",
-               date_labels = "%b") +
-  facet_trelliscope(~ Participant_ID, nrow = 2, ncol = 2, width = 800, as_plotly = TRUE, path = "trellis1/")
+trelis_plot$Timestamp <- as.Date(trelis_plot$Timestamp,format="%Y/%m/%d")
+
+trelis_plot$timestamp <- strftime(trelis_plot$Timestamp, format="%b-%Y")
+
+trelis_plot %>%
+  arrange(desc(lubridate::my(timestamp))) %>% 
+  ggplot(aes(x = Expenses, y = fct_inorder(timestamp), fill = stat(quantile))) +
+  stat_density_ridges(scale = 2, quantile_lines = TRUE,
+                      calc_ecdf = TRUE,
+                      geom = "density_ridges_gradient",
+                      quantiles = c(0.05, 0.5, 0.95)) +
+  scale_fill_manual(name = "Prob.", values = c("#E2FFF2", "white", "white", "#B0E0E6"),
+                    labels = c("(0, 5%]", "(5%, 50%]", "(50%, 95%]","(95%, 1]")) +
+  coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
+  theme_ridges()
+
+
+
+trelis_plot %>%
+  arrange(desc(lubridate::my(timestamp))) %>% 
+  ggplot(aes(x = Wage, y = fct_inorder(timestamp), fill = stat(quantile))) +
+  stat_density_ridges(scale = 2, quantile_lines = TRUE,
+                      calc_ecdf = TRUE,
+                      geom = "density_ridges_gradient",
+                      quantiles = c(0.05, 0.5, 0.95)) +
+  scale_fill_manual(name = "Prob.", values = c("#E2FFF2", "white", "white", "#B0E0E6"),
+                    labels = c("(0, 5%]", "(5%, 50%]", "(50%, 95%]","(95%, 1]")) +
+  coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
+  theme_ridges()
+
 ```
 
+
+Based on the histo-dot plot, we can see that at least 5% of participants do not have at least 20% of savings at the end of the year based on the guideline provided. More than 10% of the participants spend more than 50% of their income on Needs (Shelter + Education + Food) which is more than the 50% guideline provided. This could signify a high standard of living in that area which require the population to spend more than 50% of their income on expenses that are essentials.
 
 ``` {r}
 histo_plot <- final %>%
@@ -195,43 +274,45 @@ heat_plot$Weekdays <- weekdays(heat_plot$timestamp)
 heat_plot$Month <- format(heat_plot$timestamp, "%b") 
 
 heat_plot_final <- heat_plot %>%
-  select(c("Month", "Weekdays", "agegroup", "Expenses")) %>%
+  select(c("Month", "Weekdays", "agegroup", "Recreation", "Food")) %>%
   group_by(Month,Weekdays,agegroup)%>% 
-  summarise(Expenses = round(mean(Expenses),2) )
+  summarise(Recreation = round(mean(Recreation),2), Food = round(mean(Food),2) )
 ```
+
+#### Heatmap
+
+Through the heatmap of recreation expenses, we see that there is an increased expenditure of Recreation Activities in the Month of Feburary, October, Novemember and December. But for Food Expenditure, Tuesday Saturday and Sunday have more expenditure throughout the year than the different months.
+
 
 ``` {r}
 
-g2 <- ggplot(heat_plot_final, 
-       aes(Month, 
-           Weekdays, 
-           fill = Expenses)) + 
-geom_tile(color = "white", 
-          size = 0.1) + 
-theme_tufte(base_family = "Helvetica") + 
-coord_equal() +
-scale_fill_gradient(name = "# of attacks",
-                    low = "sky blue", 
-                    high = "dark blue") +
-facet_wrap(~agegroup, nrow = 2) +
-labs(x = NULL, 
-     y = NULL, 
-     title = "Expenses by Weekday and Month")
-
-ggplotly(g2, tooltip = c("agegroup", "Expenses"))
+p <- ggplot(heat_plot_final, aes(x=Weekdays,y=Month)) + 
+  geom_tile(aes (fill = Recreation)) +
+  scale_fill_gradient(low="lightblue1",high="darkblue",trans="log10") +
+  labs(title = "Average Recreation Expenditure of Participants by Month and Day",
+       x = "Weekdays",
+       y = "Month",
+       fill = "Recreation") +
+  theme_bw() +
+  theme(text = element_text(family = 'Fira Sans'))
+fig <- ggplotly(p)
 
 
-```
+fig
+
+x <- ggplot(heat_plot_final, aes(x=Weekdays,y=Month)) + 
+  geom_tile(aes (fill = Food)) +
+  scale_fill_gradient(low="lightblue1",high="darkblue",trans="log10") +
+  labs(title = "Average Food Expenditure of Participants by Month and Day",
+       x = "Weekdays",
+       y = "Month",
+       fill = "Food") +
+  theme_bw() +
+  theme(text = element_text(family = 'Fira Sans'))
+fig <- ggplotly(x)
 
 
-``` {r}
-heat_plot_final %>%
-  split(.$agegroup) %>%
-  lapply(function(d) plot_ly(d, x = ~Weekdays, y = ~Month, z = heat_plot_final$Expenses, type = "heatmap")) %>%
-  lapply(function(l) layout(l,
-                            title = "Subplot: Expenses by Weekday and Month")) %>% 
-  subplot(nrows = 2, shareX = TRUE, shareY = TRUE) 
-
+fig
 
 
 ```
