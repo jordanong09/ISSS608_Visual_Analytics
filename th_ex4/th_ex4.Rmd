@@ -1,0 +1,73 @@
+---
+title: "Untitled"
+description: |
+  A new article created using the Distill format.
+author:
+  - name: Nora Jones 
+    url: https://example.com/norajones
+    affiliation: Spacely Sprockets
+    affiliation_url: https://example.com/spacelysprokets
+date: "`r Sys.Date()`"
+output: distill::distill_article
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+Distill is a publication format for scientific and technical writing, native to the web. 
+
+Learn more about using Distill for R Markdown at <https://rstudio.github.io/distill>.
+
+
+```{r}
+library (tidyverse)
+library (ViSiElse)
+library (lubridate)
+
+```
+
+``` {r}
+multmerge = function(mypath){
+  filenames=list.files(path=mypath, full.names=TRUE)
+  datalist = lapply(filenames, function(x){read.csv(file=x,header=T)})
+  Reduce(function(x,y) {merge(x,y,all = TRUE)}, datalist)
+}
+
+full_data = multmerge("rawdata/")
+
+```
+
+
+``` {r, eval = FALSE}
+
+FilterDF <- data.frame(participantId = c(1, 300), stringsAsFactors = FALSE)
+
+full_data <- semi_join(full_data, FilterDF, by = "participantId")
+
+full_data <- full_data %>%
+  select(c("timestamp", "participantId", "currentMode", "hungerStatus","sleepStatus"))
+
+```
+
+``` {r}
+participant1_data <- full_data[full_data$participantId == 1, ]
+participant300_data <- full_data[full_data$participantId == 300, ]
+
+```
+
+``` {r}
+
+saveRDS(participant1_data, file = "participant1_data.rds")
+saveRDS(participant300_data, file = "participant300_data.rds")
+
+```
+
+```{r}
+
+Res <- ymd_hms(participant1_data$timestamp)
+str(Res)
+
+participant1_data <- participant1_data %>%
+  mutate (Minutes = hour(Res)*60 + minute(Res), Day = day(Res))
+```
