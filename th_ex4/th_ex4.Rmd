@@ -71,7 +71,7 @@ participant1_data <- participant1_data %>%
   mutate (Minutes = hour(Res)*60 + minute(Res), Day = day(Res))
 
 participant1_data <- participant1_data %>%
-  select(c("Day","Minutes", "currentMode", "sleepStatus" )) %>%
+  select(c("Day","Minutes", "currentMode", "sleepStatus", "hungerStatus" )) %>%
   rename ( "Current_Mode" = "currentMode",
            "Sleep_Status" = "sleepStatus"
   )
@@ -80,14 +80,11 @@ participant1_data <- participant1_data %>%
 ```
 
 
-``` {r, eval = FALSE}
-
+``` {r}
+setDT(participant1_data)
 participant1_data[, `Final Status` := {ifelse(
   cumsum (Sleep_Status != "Sleeping") != shift(cumsum(Sleep_Status != "Sleeping"), fill = 0, type = "lag"),
-  "Stop Sleep", "Start Sleep")},
-  {ifelse(
-  cumsum (Current_Mode != "AtWork") != shift(cumsum(Current_Mode != "AtWork"), fill = 0, type = "lag"),
-  "Stop Work", "Start Work")}
+  "Stop Sleep", "Start Sleep")}
   ]
 
 participant1_data[, `Final Status` := {ifelse(
@@ -108,7 +105,9 @@ participant1_data[, `Final Status` := {ifelse(
 participant1_data_2 <- participant1_data %>%
   mutate(Sleeping = cumsum(Sleep_Status != "Sleeping")) %>%
   mutate(Working = cumsum(Current_Mode != "AtWork")) %>%
-  mutate (Restaurant = cumsum(Current_Mode != "AtRestaurant"))
+  mutate (Recreation = cumsum(Current_Mode != "AtRecreation")) %>%
+  mutate (Transport = cumsum(Current_Mode != "Transport")) %>%
+  mutate (Hunger = cumsum(hungerStatus != "Hungry"))
 
 ```
 
@@ -117,18 +116,21 @@ participant1_data_2 <- participant1_data %>%
 participant1_data_3 <- participant1_data_2 %>%
   mutate(Sleep_label = ifelse(Sleeping != lag(Sleeping, default = 0), "Stop sleeping", "Start sleeping")) %>% 
   mutate(Work_label = ifelse(Working != lag(Working, default = 0), "Stop Working", "Start Working")) %>% 
-  mutate(Eat_label = ifelse(Restaurant != lag(Restaurant, default = 0), "", "MealTime"))
+  mutate(Recreation_label = ifelse(Recreation != lag(Recreation, default = 0), "Stop Recreation", "Start Recreation")) %>%
+  mutate(Transport_label = ifelse(Transport != lag(Transport, default = 0), "Stop Transport", "Start Transport")) %>%
+  mutate(Hunger_label = ifelse(Hunger != lead(Hunger, default = 0), "Start Meal", "")) 
 
 ```
 
 
 ``` {r}
 participant1_data_4 <- participant1_data_3 %>%
-  mutate(Final_status = ifelse(Sleep_label == lag(Sleep_label, default = "NA"), "" , Sleep_label))
+  mutate(sleep_status = ifelse(Sleep_label == lag(Sleep_label, default = "NA"), NA , Sleep_label)) %>%
+  mutate(work_status = ifelse(Work_label == lag(Work_label, default = "NA"), NA , Work_label)) %>%
+  mutate(recreation_status = ifelse(Recreation_label == lag(Recreation_label, default = "NA"), NA, Recreation_label)) %>%
+  mutate(transport_status = ifelse(Transport_label == lag(Transport_label, default = "NA"), NA , Transport_label)) %>%
+  mutate(hunger_status = ifelse(Hunger_label == lag(Hunger_label, default = "NA"), NA , Hunger_label))
 
-x <- participant1_data$hungerStatus
-is.na(x) <- -cumsum(c(1,head(rle(x)$lengths,-1)))
-participant1_data_4$meal_status <- c(JustAte = 'Meal Time', "")[x]
 
 ```
 
@@ -143,11 +145,26 @@ dinner <- 1081:1435
 
 participant1_data_4 <- participant1_data_4 %>%
   mutate (final_meal_status = case_when(
-    Minutes %in% supper & (meal_status == 'Meal Time') & (Sleep_Status != 'Sleeping')  ~ "Supper",
-    Minutes %in% breakfast & (meal_status == 'Meal Time') & (Sleep_Status != 'Sleeping') ~ "Breakfast",
-    Minutes %in% lunch & (meal_status == 'Meal Time') & (Sleep_Status != 'Sleeping') ~ "Lunch",
-    Minutes %in% dinner & (meal_status == 'Meal Time') & (Sleep_Status != 'Sleeping') ~ "Dinner",
-    TRUE ~ "")
+    Minutes %in% supper & (hunger_status == 'Start Meal') & (Sleep_Status != 'Sleeping')  ~ "Supper",
+    Minutes %in% breakfast & (hunger_status == 'Start Meal') & (Sleep_Status != 'Sleeping') ~ "Breakfast",
+    Minutes %in% lunch & (hunger_status == 'Start Meal') & (Sleep_Status != 'Sleeping') ~ "Lunch",
+    Minutes %in% dinner & (hunger_status == 'Start Meal') & (Sleep_Status != 'Sleeping') ~ "Dinner")
   )
+
+```
+
+``` {r}
+
+participant1_data_4$work_status[1] = NA
+participant1_data_4$transport_status[1] = NA
+participant1_data_4$recreation_status[1] = NA
+
+participant1_data_4 <- participant1_data_4 %>%
+  select(c("Day", "Minutes", "sleep_status", "work_status", "transport_status", "recreation_status", "final_meal_status"))
+```
+
+
+``` {r}
+
 
 ```

@@ -1,0 +1,170 @@
+---
+title: "Untitled"
+description: |
+  A new article created using the Distill format.
+author:
+  - name: Nora Jones 
+    url: https://example.com/norajones
+    affiliation: Spacely Sprockets
+    affiliation_url: https://example.com/spacelysprokets
+date: "`r Sys.Date()`"
+output: distill::distill_article
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+Distill is a publication format for scientific and technical writing, native to the web. 
+
+Learn more about using Distill for R Markdown at <https://rstudio.github.io/distill>.
+
+
+```{r}
+library (tidyverse)
+library (ViSiElse)
+library (lubridate)
+library(data.table)
+```
+
+``` {r}
+multmerge = function(mypath){
+  filenames=list.files(path=mypath, full.names=TRUE)
+  datalist = lapply(filenames, function(x){read.csv(file=x,header=T)})
+  Reduce(function(x,y) {merge(x,y,all = TRUE)}, datalist)
+}
+
+full_data = multmerge("rawdata/")
+
+```
+
+
+``` {r, eval = FALSE}
+
+FilterDF <- data.frame(participantId = c(1, 300), stringsAsFactors = FALSE)
+
+full_data <- semi_join(full_data, FilterDF, by = "participantId")
+
+full_data <- full_data %>%
+  select(c("timestamp", "participantId", "currentMode", "hungerStatus","sleepStatus"))
+
+```
+
+``` {r}
+participant1_data <- full_data[full_data$participantId == 1, ]
+participant300_data <- full_data[full_data$participantId == 300, ]
+
+```
+
+``` {r}
+
+participant1_data <- readRDS("data/participant1_data.rds")
+participant300_data <- readRDS("data/participant300_data.rds")
+```
+
+```{r}
+
+Res <- ymd_hms(participant1_data$timestamp)
+str(Res)
+
+participant1_data <- participant1_data %>%
+  mutate (Minutes = hour(Res)*60 + minute(Res), Day = day(Res))
+
+participant1_data <- participant1_data %>%
+  select(c("Day","Minutes", "currentMode", "sleepStatus", "hungerStatus" )) %>%
+  rename ( "Current_Mode" = "currentMode",
+           "Sleep_Status" = "sleepStatus"
+  )
+
+
+```
+
+
+``` {r}
+setDT(participant1_data)
+participant1_data[, `Final Status` := {ifelse(
+  cumsum (Sleep_Status != "Sleeping") != shift(cumsum(Sleep_Status != "Sleeping"), fill = 0, type = "lag"),
+  "Stop Sleep", "Start Sleep")}
+  ]
+
+participant1_data[, `Final Status` := {ifelse(
+  `Final Status` == shift(`Final Status`, fill = "NA", type = "lag"),
+  NA, `Final Status`)}]
+
+
+```
+
+
+``` {r}
+
+
+```
+
+
+``` {r}
+participant1_data_2 <- participant1_data %>%
+  mutate(Sleeping = cumsum(Sleep_Status != "Sleeping")) %>%
+  mutate(Working = cumsum(Current_Mode != "AtWork")) %>%
+  mutate (Recreation = cumsum(Current_Mode != "AtRecreation")) %>%
+  mutate (Transport = cumsum(Current_Mode != "Transport")) %>%
+  mutate (Hunger = cumsum(hungerStatus != "Hungry"))
+
+```
+
+
+``` {r}
+participant1_data_3 <- participant1_data_2 %>%
+  mutate(Sleep_label = ifelse(Sleeping != lag(Sleeping, default = 0), "Stop sleeping", "Start sleeping")) %>% 
+  mutate(Work_label = ifelse(Working != lag(Working, default = 0), "Stop Working", "Start Working")) %>% 
+  mutate(Recreation_label = ifelse(Recreation != lag(Recreation, default = 0), "Stop Recreation", "Start Recreation")) %>%
+  mutate(Transport_label = ifelse(Transport != lag(Transport, default = 0), "Stop Transport", "Start Transport")) %>%
+  mutate(Hunger_label = ifelse(Hunger != lead(Hunger, default = 0), "Start Meal", "")) 
+
+```
+
+
+``` {r}
+participant1_data_4 <- participant1_data_3 %>%
+  mutate(sleep_status = ifelse(Sleep_label == lag(Sleep_label, default = "NA"), NA , Sleep_label)) %>%
+  mutate(work_status = ifelse(Work_label == lag(Work_label, default = "NA"), NA , Work_label)) %>%
+  mutate(recreation_status = ifelse(Recreation_label == lag(Recreation_label, default = "NA"), NA, Recreation_label)) %>%
+  mutate(transport_status = ifelse(Transport_label == lag(Transport_label, default = "NA"), NA , Transport_label)) %>%
+  mutate(hunger_status = ifelse(Hunger_label == lag(Hunger_label, default = "NA"), NA , Hunger_label))
+
+
+```
+
+``` {r}
+supper <- 0:359
+breakfast <- 360:720
+lunch <- 721:1080
+dinner <- 1081:1435
+```
+
+``` {r}
+
+participant1_data_4 <- participant1_data_4 %>%
+  mutate (final_meal_status = case_when(
+    Minutes %in% supper & (meal_status == 'Meal Time') & (Sleep_Status != 'Sleeping')  ~ "Supper",
+    Minutes %in% breakfast & (meal_status == 'Meal Time') & (Sleep_Status != 'Sleeping') ~ "Breakfast",
+    Minutes %in% lunch & (meal_status == 'Meal Time') & (Sleep_Status != 'Sleeping') ~ "Lunch",
+    Minutes %in% dinner & (meal_status == 'Meal Time') & (Sleep_Status != 'Sleeping') ~ "Dinner")
+  )
+
+```
+
+``` {r}
+
+participant1_data_4$work_status[1] = NA
+participant1_data_4$transport_status[1] = NA
+participant1_data_4$recreation_status[1] = NA
+
+participant1_data_4 <- participant1_data_4 %>%
+  select(c("Day", "Minutes", "sleep_status", "work_status", "transport_status", "recreation_status", "final_meal_status"))
+```
+
+
+``` {r}
+
+
+```
