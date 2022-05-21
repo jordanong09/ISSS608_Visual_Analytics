@@ -24,7 +24,7 @@ Learn more about using Distill for R Markdown at <https://rstudio.github.io/dist
 library (tidyverse)
 library (ViSiElse)
 library (lubridate)
-
+library(data.table)
 ```
 
 ``` {r}
@@ -58,9 +58,8 @@ participant300_data <- full_data[full_data$participantId == 300, ]
 
 ``` {r}
 
-saveRDS(participant1_data, file = "participant1_data.rds")
-saveRDS(participant300_data, file = "participant300_data.rds")
-
+participant1_data <- readRDS("data/participant1_data.rds")
+participant300_data <- readRDS("data/participant300_data.rds")
 ```
 
 ```{r}
@@ -70,4 +69,85 @@ str(Res)
 
 participant1_data <- participant1_data %>%
   mutate (Minutes = hour(Res)*60 + minute(Res), Day = day(Res))
+
+participant1_data <- participant1_data %>%
+  select(c("Day","Minutes", "currentMode", "sleepStatus" )) %>%
+  rename ( "Current_Mode" = "currentMode",
+           "Sleep_Status" = "sleepStatus"
+  )
+
+
+```
+
+
+``` {r, eval = FALSE}
+
+participant1_data[, `Final Status` := {ifelse(
+  cumsum (Sleep_Status != "Sleeping") != shift(cumsum(Sleep_Status != "Sleeping"), fill = 0, type = "lag"),
+  "Stop Sleep", "Start Sleep")},
+  {ifelse(
+  cumsum (Current_Mode != "AtWork") != shift(cumsum(Current_Mode != "AtWork"), fill = 0, type = "lag"),
+  "Stop Work", "Start Work")}
+  ]
+
+participant1_data[, `Final Status` := {ifelse(
+  `Final Status` == shift(`Final Status`, fill = "NA", type = "lag"),
+  NA, `Final Status`)}]
+
+
+```
+
+
+``` {r}
+
+
+```
+
+
+``` {r}
+participant1_data_2 <- participant1_data %>%
+  mutate(Sleeping = cumsum(Sleep_Status != "Sleeping")) %>%
+  mutate(Working = cumsum(Current_Mode != "AtWork")) %>%
+  mutate (Restaurant = cumsum(Current_Mode != "AtRestaurant"))
+
+```
+
+
+``` {r}
+participant1_data_3 <- participant1_data_2 %>%
+  mutate(Sleep_label = ifelse(Sleeping != lag(Sleeping, default = 0), "Stop sleeping", "Start sleeping")) %>% 
+  mutate(Work_label = ifelse(Working != lag(Working, default = 0), "Stop Working", "Start Working")) %>% 
+  mutate(Eat_label = ifelse(Restaurant != lag(Restaurant, default = 0), "", "MealTime"))
+
+```
+
+
+``` {r}
+participant1_data_4 <- participant1_data_3 %>%
+  mutate(Final_status = ifelse(Sleep_label == lag(Sleep_label, default = "NA"), "" , Sleep_label))
+
+x <- participant1_data$hungerStatus
+is.na(x) <- -cumsum(c(1,head(rle(x)$lengths,-1)))
+participant1_data_4$meal_status <- c(JustAte = 'Meal Time', "")[x]
+
+```
+
+``` {r}
+supper <- 0:359
+breakfast <- 360:720
+lunch <- 721:1080
+dinner <- 1081:1435
+```
+
+``` {r}
+
+participant1_data_4 <- participant1_data_4 %>%
+  mutate (final_meal_status = case_when(
+    Minutes %in% supper & (meal_status == 'Meal Time') & (Sleep_Status != 'Sleeping')  ~ "Supper",
+    Minutes %in% breakfast & (meal_status == 'Meal Time') & (Sleep_Status != 'Sleeping') ~ "Breakfast",
+    Minutes %in% lunch & (meal_status == 'Meal Time') & (Sleep_Status != 'Sleeping') ~ "Lunch",
+    Minutes %in% dinner & (meal_status == 'Meal Time') & (Sleep_Status != 'Sleeping') ~ "Dinner",
+    TRUE ~ "")
+  )
+
 ```
