@@ -52,7 +52,7 @@ for(p in packages){
 
 Since we are observing the daily routine of the participant, data from **5** status log will be retrieved to observed the participants routine in a **1** month timeframe. To read and combine all the 5 CSVs into one data frame, we first create a function to read and merge the data. We then subseqeuntly call the function with the path of your CSV file.
 
-``` {r, eval = FALSE}
+``` {r}
 multmerge = function(mypath){
   filenames=list.files(path=mypath, full.names=TRUE)
   datalist = lapply(filenames, function(x){read.csv(file=x,header=T)})
@@ -83,23 +83,23 @@ full_data <- full_data %>%
 #### Splitting the Data Frame
 Subsequently, I split the data frame into two different data frame based on their ID to facilitate the creation of the ViSIElse book.
 
-``` {r, eval = FALSE}
+``` {r}
 participant1_data <- full_data[full_data$participantId == 1, ]
 participant300_data <- full_data[full_data$participantId == 300, ]
 
 ```
 
-``` {r, include = FALSE, , eval = FALSE}
+``` {r, include = FALSE}
 
-participant2_data <- readRDS("data/participant1_data.rds")
-participant1_data <- readRDS("data/participant300_data.rds")
+participant1_data <- readRDS("data/participant1_data.rds")
+participant300_data <- readRDS("data/participant300_data.rds")
 ```
 
 #### Inserting a new column
 
 Since the ViSIElse book require the time to be in minutes format and an Id, using the `lubridate` package, I converted the timestamp into Year-Mon-Date-Hour-Minutes-Seconds format. I then create another column call `Minutes` using the mutate function and call the `hour`, `minute` and `day` function from `lubridate` for the creation of the two new column `Minutes` and `Day`.
 
-```{r, eval = FALSE}
+```{r}
 
 Res <- ymd_hms(participant1_data$timestamp)
 
@@ -107,7 +107,7 @@ participant1_data <- participant1_data %>%
   mutate (Minutes = hour(Res)*60 + minute(Res), Day = day(Res))
 
 participant1_data <- participant1_data %>%
-  select(c("participantId","Day","Minutes", "currentMode", "sleepStatus", "hungerStatus" )) %>%
+  select(c("Day","Minutes", "currentMode", "sleepStatus", "hungerStatus" )) %>%
   rename ( "Current_Mode" = "currentMode",
            "Sleep_Status" = "sleepStatus"
   )
@@ -120,7 +120,7 @@ participant1_data <- participant1_data %>%
 This is the tricky part, to generate the status of the participant, we need to identify when the participant start the activity and when the activity stop. We first construct a new column for all the required activities using `cumsum`. This function will construct an increment in value if it did not fulfil the condition inside. 
 
 
-``` {r, , eval = FALSE}
+``` {r}
 participant1_data_2 <- participant1_data %>%
   mutate(Sleeping = cumsum(Sleep_Status != "Sleeping")) %>%
   mutate(Working = cumsum(Current_Mode != "AtWork")) %>%
@@ -131,9 +131,7 @@ participant1_data_2 <- participant1_data %>%
 
 From the previously created column, we will now identify the change in status using the `lead` and `lag` function. If the current value is different from the subsequent value (using the `lead` function), there is a change in status of your activity which will initate a stop of that activity. Similar to that, if my current value is different from the previous value, it initate a start of a new activity using the `lag` function. This will generate the required labels to identify the change in status of the activities.
 
-For meal time, due to the inconsistent data provided, we will use the **last hunger state** as the end of meal time.
-
-``` {r, , eval = FALSE}
+``` {r}
 participant1_data_3 <- participant1_data_2 %>%
   mutate(Sleep_label = ifelse(Sleeping != lead(Sleeping, default = 0), "Stop_Sleeping", 
                               ifelse(Sleeping == lag(Sleeping, default = 0), "Start_Sleeping",""))) %>% 
@@ -147,7 +145,7 @@ participant1_data_3 <- participant1_data_2 %>%
 
 Lastly, we will now check for the change in labels to finalise the start and stop of an activity, the period of the activity will be converted to NA.
 
-``` {r, , eval = FALSE}
+``` {r}
 participant1_data_4 <- participant1_data_3 %>%
   mutate(sleep_status = ifelse(Sleep_label == lag(Sleep_label, default = "NA"), NA , Sleep_label)) %>%
   mutate(work_status = ifelse(Work_label == lag(Work_label, default = "NA"), NA , Work_label)) %>%
@@ -157,18 +155,14 @@ participant1_data_4 <- participant1_data_3 %>%
 
 ```
 
-To identify the different meal time we will create a vector in minutes to indicate the different timing for the different meal. 
-
-``` {r, , eval = FALSE}
+``` {r}
 supper <- 0:359
 breakfast <- 360:720
 lunch <- 721:1080
 dinner <- 1081:1435
 ```
 
-We will then use the `case_when` function to loop the column of `hunger_status` to verify the different meals based on Minutes.
-
-``` {r, , eval = FALSE}
+``` {r}
 
 participant1_data_4 <- participant1_data_4 %>%
   mutate (final_meal_status = case_when(
@@ -180,11 +174,7 @@ participant1_data_4 <- participant1_data_4 %>%
 
 ```
 
-#### Selecting the required rows for the analysis
-
-We will force the first row of all the different status except sleep to be NA using the following function. We will then select the required columns for the VisiElse table.
-
-``` {r, , eval = FALSE}
+``` {r}
 
 participant1_data_4$work_status[1] = NA
 participant1_data_4$recreation_status[1] = NA
@@ -193,9 +183,8 @@ participant1_data_4 <- participant1_data_4 %>%
   select(c("Day", "Minutes", "sleep_status", "work_status",  "recreation_status","final_meal_status"))
 ```
 
-Next, we will change all blank cell to NA and subsequently unite all the columns into one column removing all the NA value using the `unite` function. For rows that have only NA, we will remove it using the `drop_na` function.
 
-``` {r, , eval = FALSE}
+``` {r}
 participant1_data_4 [participant1_data_4 ==""] <- NA
 
 final_data <- participant1_data_4 %>% unite ("Final_Status", sleep_status:final_meal_status, na.rm = T, remove = TRUE)
@@ -207,9 +196,7 @@ final_data <- final_data %>%
 ```
 
 
-For the VisiElse package to work, the status will need to be in columns not rows. We will use the `pivot_wider` function to pivot the table with the columns as `Final_Status` and the values from `Minutes`. Since there are some duplicates that caused the vectors to be created, we will use the `sapply` function with the `head` or `tail` to retrieve either the first or last value of any vectors found within the columns. For recreation, we will only find out the last recreation activity by the participant. 
-
-``` {r, , eval = FALSE}
+``` {r}
 pivot_table_1 <- final_data %>%
   pivot_wider(names_from = Final_Status, values_from = Minutes)
 
@@ -222,40 +209,30 @@ pivot_table_1$Stop_Recreation <- sapply(pivot_table_1$Stop_Recreation, tail, 1)
 colnames(pivot_table_1)[1] <- "id"
 ```
 
-Since the VisiElse package is unable to read NULL values, I will insert the median value within the column to replace the NULL value. I will us the `as.integer()` function to change all the type to int intead of dbl.
 
-``` {r, , eval = FALSE}
+``` {r}
 pivot_table_1[] <- lapply(pivot_table_1, function(x) {
     unlist(ifelse(lengths(x) == 1, x, list(median(unlist(x)))))})
 
 pivot_table_1[] <- lapply(pivot_table_1, function(x) {
     as.integer(x)})
 
-
+pivot_table_1
 ```
 
-
-
-
+```{r}
+x <- visielse(pivot_table_1)
+x
+```
 
 ``` {r}
-pivot_table_1 <- readRDS("data/participants_1_clean.rds")
-pivot_table_2 <- readRDS("data/participants_300_clean.rds")
-x <- visielse(pivot_table_1, informer = NULL, 
-               doplot = F, 
-               pixel = 5)
-y <- visielse(pivot_table_2, informer = NULL, 
-               doplot = F, 
-               pixel = 5)
+x <- visielse(pivot_table_1)
 x1 <- ConvertFromViSibook(x@book)
-y1 <- ConvertFromViSibook(y@book)
+x1
 ```
 
-#### Attempt to change the data
 
-We will first change the order and identify which activity is long. We will then use the required variables to match the activity and recreate a book for the plot to reference. There is an error in my code despite multiple attempt to salvage it.
-
-``` {r, eval = FALSE}
+``` {r eval=FALSE}
 x1 <- x1[order(as.numeric(x1$showorder)), ]
 x1$label <- c("Sleep", "Awake", "Work", "Stop Work", "Breakfast", "Have Fun", "Stop Fun", "Dinner")
 x1[9,] <- c("sleep", "Sleeping", "l", 1, "Start_Sleeping", "Stop_Sleeping")
@@ -268,32 +245,16 @@ x1
 
 
 ``` {r}
-v1 <- visielse(pivot_table_1, informer = NULL, 
-               book = x1,
+v2 <- visielse(pivot_table_1, 
+               book = x1, 
+               informer = NULL, 
                doplot = F, 
-               pixel = 5)
+               pixel = 30)
 
-plot(x, 
+plot(v2, 
      vp0w = 0.7, 
      unit.tps = "min", 
-     scal.unit.tps = 15, 
-     main = "Typical day for Participant 1")
-
-plot(y, 
-     vp0w = 0.7, 
-     unit.tps = "min", 
-     scal.unit.tps = 15, 
-     main = "Typical day for Participant 300")
+     scal.unit.tps = 30, 
+     main = "Typical day")
 ```
 
-
-### Analysis of Results
-
-
-From the analysis, we can see that Participant 1 usually goes to bed earlier but wakes up at the same time as Participant 300. Their working duration and meal time seems to be the same but we observed that Participant 3 have more night activities and sometimes all the way till midnight. This might be the age of participant 300 younger than participant 1.
-
-
-
-### Conclusion
-
-Visielse package is not user-friendly and many errors along the way. The documentation of the package could be improved for user to replicate the data.

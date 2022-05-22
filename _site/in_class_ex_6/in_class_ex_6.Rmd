@@ -1,9 +1,9 @@
 ---
-title: "Untitled"
+title: "In-Class-Exercise 5"
 description: |
-  A new article created using the Distill format.
+  Geospatial Exercise
 author:
-  - name: Nora Jones 
+  - name: Ong Zhi Rong Jordan
     url: https://example.com/norajones
     affiliation: Spacely Sprockets
     affiliation_url: https://example.com/spacelysprokets
@@ -156,7 +156,7 @@ logs_path <- logs_selected %>%
 
 ```
 
-``` {r}
+``` {r, eval = FALSE}
 
 logs_path_selected <- logs_path %>%
   filter(participantId = 0)
