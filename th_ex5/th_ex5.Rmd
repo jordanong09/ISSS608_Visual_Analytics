@@ -1,0 +1,397 @@
+---
+title: "Take-Home Exercise 5"
+description: |
+  Putting Visual Analytics into Practical Use.
+author:
+  - name: Ong Zhi Rong Jordan
+    url: https://example.com/norajones
+    affiliation: Spacely Sprockets
+    affiliation_url: https://example.com/spacelysprokets
+date: "`r Sys.Date()`"
+output: 
+  distill::distill_article:
+    toc: true
+    toc_depth: 2
+    code_folding: true
+    
+---
+
+# OVERVIEW
+
+## Introduction
+
+With reference to bullet point 1 and 2 of Challenge 2 of VAST Challenge 2022, I will be revealing the:
+
+  - Social areas of the city of Engagement, Ohio USA.
+  - Visualising and analysing locations with traffic bottleneck of the city of Engagement, Ohio USA.
+
+## Methodology
+
+To analyse the social areas of the city of Engagement, I will be using the data from the Check In journal to analyse the frequency of visit to the different Venue Type (Pub or Restaurants) and the Pubs and Restaurants Attribute data to identify the location of these venues to identify a pattern in their establishments. Subsequently, I will use the monthly status log to identify the travel pattern of the participants to identify choke points (high intensity visit) on various location throughout the month.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(eval = TRUE,
+                      message = FALSE,
+                      warning = FALSE)
+```
+
+# Data Preparation
+
+## Installing and Loading of Packages
+
+The following code chunks will install and load the required packages. 
+
+``` {r}
+packages = c('sf', 'tmap', 'tidyverse', 
+             'lubridate', 'clock', 
+             'sftime', 'rmarkdown')
+for (p in packages){
+  if(!require(p, character.only = T)){
+    install.packages(p)
+  }
+  library(p,character.only = T)
+}
+
+```
+
+## Loading Raw Data Set
+
+The `read_sf` function will be used instead of read_csv for the various data set to read simple features and retrieve their geometry types.
+
+``` {r, , eval = FALSE}
+
+
+pubs <- read_sf("rawdata/Pubs.csv", 
+                   options = "GEOM_POSSIBLE_NAMES=location")
+buildings <- read_sf("rawdata/Buildings.csv", 
+                   options = "GEOM_POSSIBLE_NAMES=location")
+restaurants <- read_sf("rawdata/Restaurants.csv", 
+                   options = "GEOM_POSSIBLE_NAMES=location")
+check_in <- read.csv("rawdata/CheckinJournal.csv")
+
+```
+
+``` {r, include = FALSE}
+
+buildings <- readRDS ("data/buildings.rds")
+
+```
+
+## Data Cleaning and Wrangling
+
+To bind two different data frame into one, there is a need for a similar key and columns. For this analysis, we will use the *Venue Id* as the key. The `rbind` function is use to bind the the two different data frame rows together.
+
+``` {r, eval = FALSE}
+
+pubs <- pubs %>%
+  select(c("pubId", "buildingId")) %>%
+  rename("venueId" = "pubId") 
+
+restaurants <- restaurants %>%
+  select(c("restaurantId", "buildingId")) %>%
+  rename("venueId" = "restaurantId") 
+
+pubs$venueId <- as.numeric(as.character(pubs$venueId))
+restaurants$venueId <- as.numeric(as.character(restaurants$venueId))
+
+pubsNrest <- rbind(pubs,restaurants)
+
+```
+
+### Filter based on Venue
+
+Next, we will filter the check-in data to only show pubs and restaurants by using the `filter` function. Since there is a missing building Id for the venue types, we will use a `full_join` the insert the required building Id to the check-in journal.
+
+```{r, eval = FALSE}
+check_in <- check_in %>%
+  filter(venueType == "Pub" | venueType == "Restaurant")
+
+clean_data <- full_join(check_in,pubsNrest, by = "venueId")
+
+```
+
+### Insert day of the week
+
+To find out the day of the week, we will use the `lubridate` function `wday` to insert a new column. We will then use `case_when` to run through all the rows and identify the difference types of weekday. Visit count will be calculated using the `n()` function and filtering the duplicated rows using the `unique` function.
+
+
+``` {r, eval = FALSE}
+
+clean_data_selected <- clean_data %>%
+   mutate (Timestamp = date_time_parse(timestamp,
+                                      zone ="",
+                                      format = "%Y-%m-%dT%H:%M:%S")) %>% 
+  mutate (day = wday(Timestamp, label = TRUE))
+
+weekday <- c("Mon", "Tue", "Wed", "Thu", "Fri")
+weekend <- c("Sat", "Sun")
+
+clean_data_selected <- clean_data_selected %>%
+  mutate (Weektype = case_when(
+    day %in% weekday ~ "Weekday",
+    day %in% weekend ~ "Weekend"
+  )) %>% 
+  select (-day)
+
+new_data <- clean_data %>%
+  select(c("venueType", "buildingId", "location")) %>%
+  group_by(buildingId) %>%
+  mutate(n = n()) 
+
+new_data <- unique(new_data)
+
+new_data_weekday <- clean_data_selected %>%
+  select(c("venueType", "buildingId", "location","Weektype")) %>%
+  group_by(buildingId, Weektype) %>%
+  mutate(n = n()) 
+
+new_data_weekday <- unique(new_data_weekday)
+
+```
+
+``` {r, include = FALSE}
+new_data <- readRDS("data/clean_data_allday.rds")
+new_data_weekday <- readRDS("data/clean_data_weekday.rds")
+
+```
+
+# Visulisation and Analysis
+
+## Plotting of Venue using tmap
+
+### Monthly Visit Count of Venue
+
+For the 1st plot, we use the shape to visualise different venue types and the color to identify the density of the visit count. The first plot shows one month visit count of the various venue.
+
+```{r}
+
+tm_shape(buildings)+
+tm_polygons(col = "grey60",
+           size = 1,
+           border.col = "black",
+           border.lwd = 1) +
+tm_shape(new_data) +
+  tm_symbols(size = 0.5, shape = "venueType", shapes.labels = c("Pub", "Restaurant"), title.shape = "Venue Type",
+             col = "n", style = "cont", title.col = "Visit Count"
+            ) +
+  tm_layout(title= 'Visit Count of Venue by \nResidents in Ohio', 
+            title.position = c('right', 'top'),
+            title.size = 1)
+tmap_mode("plot")
+
+```
+
+### Monthly Visit Count of Venue by Weekday
+
+Next, by using `tm_facet`, we are able to segregate the data by the type of weekday. We now plot the visit based on Weekdays and Weekends to identify any patterns.
+
+``` {r}
+tm_shape(buildings)+
+tm_polygons(col = "grey60",
+           size = 1,
+           border.col = "black",
+           border.lwd = 1) +
+tm_shape(new_data_weekday) +
+  tm_symbols(size = 0.5, shape = "venueType", shapes.labels = c("Pub", "Restaurant"), title.shape = "Venue Type",
+             col = "n", style = "cont", title.col = "Visit Count"
+            )  +
+  tm_facets(by = "Weektype", nrow = 1, free.coords = FALSE) +
+  tm_layout(main.title= 'Visit Count of Venue by Resident in Ohio', 
+            main.title.position = c('center'),
+            main.title.size = 1, legend.outside.size = 0.2)
+tmap_mode("plot")
+
+
+```
+
+### Analysis of Plot
+
+From our 1st plot, we observed that *Pubs* in the central region have a higher visit count than the pubs located in the outskirt of the citiy. Whereas the restaurants located away from the central region have a slightly higher visit count that the restaurants located within the central region. 
+
+When we look at the different weekday types, we observed that in general, during the weekdays, restaurants have a higher visit count than pubs. Restaurants in the outskirt (located in the north and south) have a slightly higher visit count that restaurants located in the central region. Whereas during the weekends, *Pubs* in the central region is definitely the social gathering point for the people in the city of Engagement. 
+
+Despite the even distribution of pubs and restaurants throughout the city, high social activities seems to be only concentrated within the central region regardless of the weekday types.
+
+
+# Plotting of bottlenecks using Hexbin
+
+``` {r, eval = FALSE, include = FALSE}
+logs <- read_sf("rawdata1/ParticipantStatusLogs1.csv", 
+                options = "GEOM_POSSIBLE_NAMES=currentLocation")
+logs1 <- read_sf("rawdata1/ParticipantStatusLogs2.csv", 
+                options = "GEOM_POSSIBLE_NAMES=currentLocation")
+logs2 <- read_sf("rawdata1/ParticipantStatusLogs3.csv", 
+                options = "GEOM_POSSIBLE_NAMES=currentLocation")
+logs3 <- read_sf("rawdata1/ParticipantStatusLogs4.csv", 
+                options = "GEOM_POSSIBLE_NAMES=currentLocation")
+logs4 <- read_sf("rawdata1/ParticipantStatusLogs5.csv", 
+                options = "GEOM_POSSIBLE_NAMES=currentLocation")
+                
+final_log <- bind_rows(logs, logs1, logs2,logs3,logs4)
+
+```
+
+``` {r, eval = FALSE, include = FALSE}
+logs_selected <- final_log %>%
+  mutate(Timestamp = date_time_parse(timestamp,
+                zone = "",
+                format = "%Y-%m-%dT%H:%M:%S")) %>%
+  mutate (day = wday(Timestamp, label = TRUE)) %>%
+  filter(currentMode == "Transport")
+
+weekday <- c("Mon", "Tue", "Wed", "Thu", "Fri")
+weekend <- c("Sat", "Sun")
+
+logs_selected <- logs_selected %>%
+  mutate (Weektype = case_when(
+    day %in% weekday ~ "Weekday",
+    day %in% weekend ~ "Weekend"
+  )) %>% 
+  select (-day)
+
+
+```
+
+``` {r, eval = FALSE, include = FALSE}
+logs_selected_weekday <- logs_selected %>%
+  filter(Weektype == "Weekday")
+
+logs_selected_weekend <- logs_selected %>%
+  filter(Weektype == "Weekend")
+```
+
+## Cleaning of Data
+
+Similar to the data cleaning of check-in journal, the additional steps taken for the status log is to convert the data frame to `sf` format using `st_as_sf` before we combine the dataframe with the hex dataframe.
+
+``` {r, eval = FALSE}
+
+logs_selected <- st_as_sf(logs_selected)
+logs_selected_weekday <- st_as_sf(logs_selected_weekday)
+logs_selected_weekend <- st_as_sf(logs_selected_weekend)
+
+
+```
+
+### Creating the Hex data
+
+By using the polygon data from building, the hexagon data is created.
+
+``` {r}
+hex <- st_make_grid(buildings, 
+                    cellsize=100, 
+                    square=FALSE) %>%
+  st_sf() %>%
+  rowid_to_column('hex_id')
+
+```
+
+
+``` {r, eval = FALSE}
+
+points_in_hex_allday <- st_join(logs_selected, 
+                        hex) %>%
+  st_set_geometry(NULL) %>%
+  count(name='pointCount', hex_id)
+
+points_in_hex_weekday <- st_join(logs_selected_weekday, 
+                        hex) %>%
+  st_set_geometry(NULL) %>%
+  count(name='pointCount', hex_id)
+
+
+points_in_hex_weekend <- st_join(logs_selected_weekend, 
+                        hex) %>%
+  st_set_geometry(NULL) %>%
+  count(name='pointCount', hex_id)
+
+```
+
+``` {r, eval = FALSE}
+
+hex_combined_allday <- hex %>%
+  left_join(points_in_hex_allday, 
+            by = 'hex_id') %>%
+  replace(is.na(.), 0)
+
+hex_combined_weekday <- hex %>%
+  left_join(points_in_hex_weekday, 
+            by = 'hex_id') %>%
+  replace(is.na(.), 0)
+
+hex_combined_weekend <- hex %>%
+  left_join(points_in_hex_weekend, 
+            by = 'hex_id') %>%
+  replace(is.na(.), 0)
+```
+
+``` {r}
+hex_combined_allday <- readRDS("data/hex_combined_allday.rds")
+hex_combined_weekday <- readRDS("data/hex_combined_weekday.rds")
+hex_combined_weekend <- readRDS("data/hex_combined_weekend.rds")
+
+```
+
+## Plotting of bottleneck/congestion using tmap
+
+### Plotting and Analysis of Hexbin Plot
+
+To plot the map, we will use the `tm_shape` function to call the hexagon shape and `filter` to filter all the hexagon which has no visit count. `tm_fill` is used to identify the density of visit based on quantile. The plot will consist of the traffic condition on a monthly basis and both weekday and weekend.
+
+``` {r}
+
+tm_shape(hex_combined_allday %>%
+           filter(pointCount > 0))+
+  tm_fill("pointCount",
+          n = 6,
+          title = "Visit Count",
+          style = "quantile") +
+  tm_borders(alpha = 0.1) +
+  tm_layout(main.title= 'Visit Count of Buildings by Resident in Ohio', 
+            main.title.position = c('center'),
+            main.title.size = 1)
+
+```
+
+
+``` {r}
+
+w1 <- tm_shape(hex_combined_weekday %>%
+           filter(pointCount > 0))+
+  tm_fill("pointCount",
+          n = 6,
+          title = "Visit Count",
+          style = "quantile") +
+  tm_borders(alpha = 0.1) +
+  tm_layout(main.title= 'Visit Count of Buildings by \nResident in Ohio during the Weekday', 
+            main.title.position = c('center'),
+            main.title.size = 0.7)
+
+w2 <- tm_shape(hex_combined_weekend %>%
+           filter(pointCount > 0),)+
+  tm_fill("pointCount",
+          n = 6,
+          title = "Visit Count",
+          style = "quantile") +
+  tm_borders(alpha = 0.1) +
+  tm_layout(main.title= 'Visit Count of Buildings by \nResident in Ohio during the Weekend', 
+            main.title.position = c('center'),
+            main.title.size = 0.7)
+
+tmap_arrange(w1, w2)
+tmap_mode("plot")
+
+
+```
+
+### Analysis of Plot
+
+From the plot, we can identify the congestion of the city based on the frequency of visit by the participants. The narrow streets along the city are definitely congested regardless of the weekday types.
+
+During the weekdays, we can see the **central** and **north** region have a higher traffic within the area. For the other region, there seems to be no trend of increase or decrease traffic regardless of the weekday type. 
+
+# Learning Points
+
+Throughout this exercise, I was able to utilize the `tmap` function and customize various inputs such as the shape and fill colour. My own reflection is that tmap is similar to ggplot and therefore is user-friendly for those who are proficient in the layers of ggplot. 
+Hexbin Maps provide a good visulisation of the density in an area instead of a point but sometimes without an overlay would be difficult to understand or provide good insights. Even if the plot were to overlay with the hexbin map, the plot would be unreadable due to the size and the structure of a hexagon.
+
