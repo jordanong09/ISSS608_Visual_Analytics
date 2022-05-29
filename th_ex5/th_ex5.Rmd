@@ -32,7 +32,8 @@ To analyse the social areas of the city of Engagement, I will be using the data 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(eval = TRUE,
                       message = FALSE,
-                      warning = FALSE)
+                      warning = FALSE,
+                      layout="l-page")
 ```
 
 # Data Preparation
@@ -44,7 +45,7 @@ The following code chunks will install and load the required packages.
 ``` {r}
 packages = c('sf', 'tmap', 'tidyverse', 
              'lubridate', 'clock', 
-             'sftime', 'rmarkdown')
+             'sftime', 'rmarkdown', "binr")
 for (p in packages){
   if(!require(p, character.only = T)){
     install.packages(p)
@@ -67,6 +68,12 @@ buildings <- read_sf("rawdata/Buildings.csv",
                    options = "GEOM_POSSIBLE_NAMES=location")
 restaurants <- read_sf("rawdata/Restaurants.csv", 
                    options = "GEOM_POSSIBLE_NAMES=location")
+schools <- read_sf("rawdata/Schools.csv", 
+                   options = "GEOM_POSSIBLE_NAMES=location")
+apartments <- read_sf("rawdata/Apartments.csv", 
+                   options = "GEOM_POSSIBLE_NAMES=location")
+employers <- read_sf("rawdata/Employers.csv", 
+                   options = "GEOM_POSSIBLE_NAMES=location")
 check_in <- read.csv("rawdata/CheckinJournal.csv")
 
 ```
@@ -74,6 +81,8 @@ check_in <- read.csv("rawdata/CheckinJournal.csv")
 ``` {r, include = FALSE}
 
 buildings <- readRDS ("data/buildings.rds")
+schools <- readRDS ("data/schools.rds")
+apartments <- readRDS ("data/apartments.rds")
 
 ```
 
@@ -94,7 +103,35 @@ restaurants <- restaurants %>%
 pubs$venueId <- as.numeric(as.character(pubs$venueId))
 restaurants$venueId <- as.numeric(as.character(restaurants$venueId))
 
-pubsNrest <- rbind(pubs,restaurants)
+pubs$buildingtype <- "Pubs"
+restaurants$buildingtype <- "Restaurants"
+
+
+buildingType <- bind_rows(pubs,restaurants)
+
+```
+
+``` {r, eval = FALSE}
+
+apartments$rentalCost <- as.numeric(as.character(apartments$rentalCost))
+
+cuts <- bins(apartments$rentalCost, target.bins = 5, max.breaks = 5)
+cuts$breaks <- bins.getvals(cuts)
+cuts$binct
+
+lowRental <- as.double(c(300:600))
+midRental <- as.double(c(601:800))
+highRental <- as.double(c(801:1000))
+suhighRental <- as.double(c(1001:1605))
+
+apartments <- apartments %>%
+  mutate (Rental_Type = case_when(
+    round(rentalCost) %in% lowRental ~ "Low Rental",
+    round(rentalCost) %in% midRental ~ "Mid Rental",
+    round(rentalCost) %in% highRental ~ "High Rental",
+    round(rentalCost) %in% suhighRental ~ "Super High Rental"
+  )) 
+
 
 ```
 
@@ -106,7 +143,7 @@ Next, we will filter the check-in data to only show pubs and restaurants by usin
 check_in <- check_in %>%
   filter(venueType == "Pub" | venueType == "Restaurant")
 
-clean_data <- full_join(check_in,pubsNrest, by = "venueId")
+clean_data <- full_join(check_in,buildingType, by = "venueId")
 
 ```
 
@@ -133,23 +170,19 @@ clean_data_selected <- clean_data_selected %>%
   )) %>% 
   select (-day)
 
-new_data <- clean_data %>%
-  select(c("venueType", "buildingId", "location")) %>%
-  group_by(buildingId) %>%
-  mutate(n = n()) 
-
-new_data <- unique(new_data)
 
 new_data_weekday <- clean_data_selected %>%
   select(c("venueType", "buildingId", "location","Weektype")) %>%
   group_by(buildingId, Weektype) %>%
   mutate(n = n()) 
 
-new_data_weekday <- unique(new_data_weekday)
+#new_data_weekday <- unique(new_data_weekday)
 
 ```
 
+
 ``` {r, include = FALSE}
+
 new_data <- readRDS("data/clean_data_allday.rds")
 new_data_weekday <- readRDS("data/clean_data_weekday.rds")
 
@@ -159,9 +192,105 @@ new_data_weekday <- readRDS("data/clean_data_weekday.rds")
 
 ## Plotting of Venue using tmap
 
+### Distribution of Building Type around the City
+
+For the plot, we will use different colours of polygon to identify possible trends in the way the city was divided based on the distribution of building types. The first plot shows the overall city building type distribution using `tm_polygons` colors to seperate the different types.
+
+``` {r}
+tm_shape(buildings)+
+tm_polygons(col = "buildingType",
+           size = 1,
+           title = "Building Type",
+           border.col = "black",
+           border.lwd = 1) +
+  tm_layout(main.title= 'Distribution of Building Type in Ohio', 
+            main.title.position = c('left'),
+            main.title.size = 1.3, legend.outside = TRUE,)
+
+
+```
+
+
+Through the plot, we can identify the southern region is heavily commercialise while the central region of the city can be identified as a Heartlands due to the high volumn of residential area. The northern part of the city has a even distribution of residential and commerical area.
+
+
+### Distribution of Schools around the City
+
+We will also look at the distribution of schools and their cost required to see if the area affect the school costs.
+
+``` {r}
+schools$monthlyCost <- round(as.numeric(as.character(schools$monthlyCost)),2)
+
+tm_shape(buildings)+
+tm_polygons(col = "buildingType",
+           size = 1,
+           title = "Building Type",
+           border.col = "black",
+           border.lwd = 1) +
+tm_shape(schools) +
+  tm_symbols(size = 0.5, col = "monthlyCost", style = "cont", title.col = "Monthly Cost"
+             ) +
+  tm_layout(main.title= 'Schools Location in Ohio', 
+            main.title.position = c('left'),
+            main.title.size = 1.5, legend.outside = TRUE,)
+tmap_mode("plot")
+
+```
+
+From the plot, we observed that the school located within the commercialise area in the south has a lower monthly cost compared to the other schools which is located at the region with more residential area surronding it. This could be due to the high volume of demand for the schools within that area due to its vicinity around the residential area.
+
+### Distribution of Apartment in the City of Engagement
+
+Next, we will analyse the distribution of Apartment based on the rental cost to identify any possible trends in the city.
+
+We will plot two different apartment plots, one is for the number of rooms of the apartment, the other is the max occupancy of the apartment.
+
+#### Plot of Apartment based on Max Occupancy 
+
+``` {r}
+
+tm_shape(buildings)+
+tm_polygons(col = "grey",
+           size = 1,
+           border.col = "black",
+           border.lwd = 1) +
+tm_shape(apartments) +
+  tm_symbols(size = 0.2, col = "maxOccupancy", title.col = "Max Occupancy"
+             ) +
+  tm_facets(by = "Rental_Type", nrow = 2, free.coords = FALSE) +
+  tm_layout(main.title= 'Apartment Location in Ohio \nbased on Rental Cost', 
+            main.title.position = c('left'),
+            main.title.size = 1)
+tmap_mode("plot")
+
+```
+
+#### Plot of Apartment based on Number of Rooms
+
+``` {r}
+
+tm_shape(buildings)+
+tm_polygons(col = "grey",
+           size = 1,
+           border.col = "black",
+           border.lwd = 1) +
+tm_shape(apartments) +
+  tm_symbols(size = 0.2, col = "numberOfRooms", title.col = "Number of Rooms"
+             ) +
+  tm_facets(by = "Rental_Type", nrow = 2, free.coords = FALSE) +
+  tm_layout(main.title= 'Apartment Location in Ohio \nbased on Rental Cost', 
+            main.title.position = c('left'),
+            main.title.size = 1)
+tmap_mode("plot")
+
+```
+
+
+From the two plots, we observed that the rental cost is not affected by the number of rooms of the apartment but the occupancy number of the apartment. Occupancy rate of 3 and 4 tend to have **higher rental cost** and concentrated within the **southern** and **central** region. Whereas the **low rental** apartments can be found mostly at the **northern region** of the city.
+
 ### Monthly Visit Count of Venue
 
-For the 1st plot, we use the shape to visualise different venue types and the color to identify the density of the visit count. The first plot shows one month visit count of the various venue.
+For the plot, we use the shape to visualise different venue types and the color to identify the density of the visit count. The first plot shows one month visit count of the various venue.
 
 ```{r}
 
@@ -206,14 +335,16 @@ tmap_mode("plot")
 
 ### Analysis of Plot
 
-From our 1st plot, we observed that *Pubs* in the central region have a higher visit count than the pubs located in the outskirt of the citiy. Whereas the restaurants located away from the central region have a slightly higher visit count that the restaurants located within the central region. 
+From our 1st plot, we observed that *Pubs* in the central region have a higher visit count than the pubs located in the outskirt of the city. Whereas the restaurants located away from the central region have a slightly higher visit count that the restaurants located within the central region. This could be due to the commercial region in the North and South of the city which would bring in more visits throughout the month. This also shows that residents would visit pubs that are located within the residential area instead of the commericalise area.
 
-When we look at the different weekday types, we observed that in general, during the weekdays, restaurants have a higher visit count than pubs. Restaurants in the outskirt (located in the north and south) have a slightly higher visit count that restaurants located in the central region. Whereas during the weekends, *Pubs* in the central region is definitely the social gathering point for the people in the city of Engagement. 
+When we look at the different weekday types, we observed that in general, during the weekdays, restaurants have a higher visit count than pubs. Restaurants in the commercial areas (located in the north and south) have a slightly higher visit count that restaurants located in the central region. Whereas during the weekends, *Pubs* in the central region is definitely the social gathering point for the people in the city of Engagement. 
 
-Despite the even distribution of pubs and restaurants throughout the city, high social activities seems to be only concentrated within the central region regardless of the weekday types.
+Despite the even distribution of pubs and restaurants throughout the city, high social activities seems to be concentrated within the central region regardless of the weekday types.
 
 
 # Plotting of bottlenecks using Hexbin
+
+We will combine 5 status log to gather 1 month worth of data for analysis. Similar to methods used to prepare the Pubs and Restaurant data.
 
 ``` {r, eval = FALSE, include = FALSE}
 logs <- read_sf("rawdata1/ParticipantStatusLogs1.csv", 
@@ -237,27 +368,41 @@ logs_selected <- final_log %>%
                 zone = "",
                 format = "%Y-%m-%dT%H:%M:%S")) %>%
   mutate (day = wday(Timestamp, label = TRUE)) %>%
+  mutate (hour = hour(Timestamp)) %>%
   filter(currentMode == "Transport")
-
-weekday <- c("Mon", "Tue", "Wed", "Thu", "Fri")
-weekend <- c("Sat", "Sun")
-
-logs_selected <- logs_selected %>%
-  mutate (Weektype = case_when(
-    day %in% weekday ~ "Weekday",
-    day %in% weekend ~ "Weekend"
-  )) %>% 
-  select (-day)
-
 
 ```
 
-``` {r, eval = FALSE, include = FALSE}
-logs_selected_weekday <- logs_selected %>%
-  filter(Weektype == "Weekday")
+### Timings for Analysis
 
-logs_selected_weekend <- logs_selected %>%
-  filter(Weektype == "Weekend")
+For this analysis, we will evaluate the **Morning** and **Evening** Rush Hour timings on Sat and Mon to identify bottlenecks/congestion within the city. Morning Peak hour is define as 0600hrs - 0900hrs where Evening Rush Hour is defined as 1700hrs - 2000hrs.
+
+``` {r, eval = FALSE}
+
+morningRH <- c(6:9)
+eveningRH <- c(17:20)
+
+logs_selected <- logs_selected %>%
+  mutate (dayType = case_when(
+    hour %in% morningRH ~ "Morning Peak Hour",
+    hour %in% eveningRH ~ "Evening Peak Hour"
+  )) %>% 
+  select (-hour)
+```
+
+``` {r, eval = FALSE, include = FALSE}
+logs_selected_mon_mornpeak <- logs_selected %>%
+  filter(dayType == "Morning Peak Hour" & day == "Mon" )
+
+logs_selected_mon_evenpeak <- logs_selected %>%
+  filter(dayType == "Evening Peak Hour" & day == "Mon" )
+
+logs_selected_sat_mornpeak <- logs_selected %>%
+  filter(dayType == "Morning Peak Hour" & day == "Sat" )
+
+logs_selected_sat_evenpeak <- logs_selected %>%
+  filter(dayType == "Evening Peak Hour" & day == "Sat" )
+
 ```
 
 ## Cleaning of Data
@@ -266,10 +411,10 @@ Similar to the data cleaning of check-in journal, the additional steps taken for
 
 ``` {r, eval = FALSE}
 
-logs_selected <- st_as_sf(logs_selected)
-logs_selected_weekday <- st_as_sf(logs_selected_weekday)
-logs_selected_weekend <- st_as_sf(logs_selected_weekend)
-
+logs_selected <- st_as_sf(logs_selected_mon_mornpeak)
+logs_selected_weekday <- st_as_sf(logs_selected_mon_evenpeak)
+logs_selected_weekend <- st_as_sf(logs_selected_sat_mornpeak)
+logs_selected_weekend <- st_as_sf(logs_selected_sat_evenpeak)
 
 ```
 
@@ -279,7 +424,7 @@ By using the polygon data from building, the hexagon data is created.
 
 ``` {r}
 hex <- st_make_grid(buildings, 
-                    cellsize=100, 
+                    cellsize=70, 
                     square=FALSE) %>%
   st_sf() %>%
   rowid_to_column('hex_id')
@@ -289,18 +434,23 @@ hex <- st_make_grid(buildings,
 
 ``` {r, eval = FALSE}
 
-points_in_hex_allday <- st_join(logs_selected, 
+points_in_hex_mon_morn <- st_join(logs_selected_mon_mornpeak, 
                         hex) %>%
   st_set_geometry(NULL) %>%
   count(name='pointCount', hex_id)
 
-points_in_hex_weekday <- st_join(logs_selected_weekday, 
+points_in_hex_mon_even <- st_join(logs_selected_mon_evenpeak, 
                         hex) %>%
   st_set_geometry(NULL) %>%
   count(name='pointCount', hex_id)
 
 
-points_in_hex_weekend <- st_join(logs_selected_weekend, 
+points_in_hex_sat_morn <- st_join(logs_selected_sat_mornpeak, 
+                        hex) %>%
+  st_set_geometry(NULL) %>%
+  count(name='pointCount', hex_id)
+
+points_in_hex_sat_even <- st_join(logs_selected_sat_evenpeak, 
                         hex) %>%
   st_set_geometry(NULL) %>%
   count(name='pointCount', hex_id)
@@ -309,26 +459,33 @@ points_in_hex_weekend <- st_join(logs_selected_weekend,
 
 ``` {r, eval = FALSE}
 
-hex_combined_allday <- hex %>%
-  left_join(points_in_hex_allday, 
+hex_combined_mon_morn <- hex %>%
+  left_join(points_in_hex_mon_morn, 
             by = 'hex_id') %>%
   replace(is.na(.), 0)
 
-hex_combined_weekday <- hex %>%
-  left_join(points_in_hex_weekday, 
+hex_combined_mon_even <- hex %>%
+  left_join(points_in_hex_mon_even, 
             by = 'hex_id') %>%
   replace(is.na(.), 0)
 
-hex_combined_weekend <- hex %>%
-  left_join(points_in_hex_weekend, 
+hex_combined_sat_morn <- hex %>%
+  left_join(points_in_hex_sat_morn, 
+            by = 'hex_id') %>%
+  replace(is.na(.), 0)
+
+hex_combined_sat_even <- hex %>%
+  left_join(points_in_hex_sat_even, 
             by = 'hex_id') %>%
   replace(is.na(.), 0)
 ```
 
-``` {r}
-hex_combined_allday <- readRDS("data/hex_combined_allday.rds")
-hex_combined_weekday <- readRDS("data/hex_combined_weekday.rds")
-hex_combined_weekend <- readRDS("data/hex_combined_weekend.rds")
+``` {r, include = FALSE}
+
+hex_combined_mon_morn <- readRDS("data/hex_combined_mon_morn.rds")
+hex_combined_mon_even <- readRDS("data/hex_combined_mon_even.rds")
+hex_combined_sat_morn <- readRDS("data/hex_combined_sat_morn.rds")
+hex_combined_sat_even <- readRDS("data/hex_combined_sat_even.rds")
 
 ```
 
@@ -339,42 +496,80 @@ hex_combined_weekend <- readRDS("data/hex_combined_weekend.rds")
 To plot the map, we will use the `tm_shape` function to call the hexagon shape and `filter` to filter all the hexagon which has no visit count. `tm_fill` is used to identify the density of visit based on quantile. The plot will consist of the traffic condition on a monthly basis and both weekday and weekend.
 
 ``` {r}
-
-tm_shape(hex_combined_allday %>%
+w1 <- tm_shape(buildings)+
+tm_polygons(col = "buildingType",
+           size = 1,
+           title = "Building Type",
+           border.col = "black",
+           border.lwd = 1, legend.show = FALSE) +
+  tm_shape(hex_combined_mon_morn %>%
            filter(pointCount > 0))+
   tm_fill("pointCount",
-          n = 6,
+          n = 5,
           title = "Visit Count",
-          style = "quantile") +
+          style = "quantile", alpha = 0.8) +
   tm_borders(alpha = 0.1) +
-  tm_layout(main.title= 'Visit Count of Buildings by Resident in Ohio', 
+  tm_layout(main.title= 'Traffic Condition on Mon \nduring Morning Rush Hour', 
             main.title.position = c('center'),
-            main.title.size = 1)
+            main.title.size = 0.8)
+
+w2 <- tm_shape(buildings) +
+tm_polygons(col = "buildingType",
+           size = 1,
+           title = "Building Type",
+           border.col = "black",
+           border.lwd = 1, legend.show = FALSE) +
+  tm_shape(hex_combined_sat_morn %>%
+           filter(pointCount > 0),)+
+  tm_fill("pointCount",
+          n = 5,
+          title = "Visit Count",
+          style = "quantile", alpha = 0.8) +
+  tm_borders(alpha = 0.1) +
+  tm_layout(main.title= 'Traffic Condition on Sat \nduring Morning Rush Hour', 
+            main.title.position = c('center'),
+            main.title.size = 0.8)
+
+tmap_arrange(w1, w2)
+tmap_mode("plot")
+
 
 ```
 
 
 ``` {r}
 
-w1 <- tm_shape(hex_combined_weekday %>%
+w1 <- tm_shape(buildings)+
+tm_polygons(col = "buildingType",
+           size = 1,
+           title = "Building Type",
+           border.col = "black",
+           border.lwd = 1, legend.show = FALSE) +
+  tm_shape(hex_combined_mon_even %>%
            filter(pointCount > 0))+
   tm_fill("pointCount",
-          n = 6,
+          n = 5,
           title = "Visit Count",
-          style = "quantile") +
+          style = "quantile", alpha = 0.8) +
   tm_borders(alpha = 0.1) +
-  tm_layout(main.title= 'Visit Count of Buildings by \nResident in Ohio during the Weekday', 
+  tm_layout(main.title= 'Traffic Condition on Mon \nduring Evening Rush Hour', 
             main.title.position = c('center'),
             main.title.size = 0.7)
 
-w2 <- tm_shape(hex_combined_weekend %>%
+w2 <- tm_shape(buildings)+
+tm_polygons(col = "buildingType",
+           size = 1,
+           title = "Building Type",
+           border.col = "black",
+           border.lwd = 1, legend.show = FALSE) +
+  tm_shape(hex_combined_sat_even %>%
            filter(pointCount > 0),)+
   tm_fill("pointCount",
-          n = 6,
+          n = 5,
           title = "Visit Count",
-          style = "quantile") +
+          style = "quantile", alpha = 0.8) +
   tm_borders(alpha = 0.1) +
-  tm_layout(main.title= 'Visit Count of Buildings by \nResident in Ohio during the Weekend', 
+  tm_layout(main.title= 'Traffic Condition on Sat \nduring Evening Rush Hour', 
             main.title.position = c('center'),
             main.title.size = 0.7)
 
@@ -386,9 +581,11 @@ tmap_mode("plot")
 
 ### Analysis of Plot
 
-From the plot, we can identify the congestion of the city based on the frequency of visit by the participants. The narrow streets along the city are definitely congested regardless of the weekday types.
+From the plot, we can identify the congestion of the city based on the frequency of visit by the participants. 
 
-During the weekdays, we can see the **central** and **north** region have a higher traffic within the area. For the other region, there seems to be no trend of increase or decrease traffic regardless of the weekday type. 
+During the Morning Rush Hour, the narrow streets along the city are definitely congested regardless of the Weekday or Weekend. For Weekday, we observed that there is an increased congestion within the central region residential area compared to weekends.
+
+For the evening Rush hour, it seems that there is no difference between Mon or Sat with a congested narrow path and high volume of traffic at the northern region.
 
 # Learning Points
 
