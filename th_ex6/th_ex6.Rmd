@@ -294,14 +294,16 @@ quantile_graph_aggregated <- quantile(V(cgraph_aggregated)$size, #identify top 1
          )
 
 
-V(cgraph_aggregated)$color <- ifelse (V(cgraph_aggregated)$size > quantile_graph_aggregated[10], "yellow", "grey") #color yellow if vertices is top 10%
+V(cgraph_aggregated)$color <- ifelse (V(cgraph_aggregated)$size > quantile_graph_aggregated[10], "darkgoldenrod3", "azure3") #color yellow if vertices is top 10%
 E(cgraph_aggregated)$color <- "grey"
-V(cgraph_aggregated)$size <- V(cgraph_aggregated)$size/0.065 #Increase the size of nodes based on their centrality score, only those with high score will be visible
+V(cgraph_aggregated)$size <- V(cgraph_aggregated)$size/0.065 
+#Increase the size of nodes based on their centrality score, only those with high score will be visible
 
 V(cgraph_aggregated)$label <- ifelse (V(cgraph_aggregated)$size*0.065 > quantile_graph_aggregated[10],V(cgraph_aggregated)$name,NA)
 #label the vertices if vertices belongs to the top 10%
 
 plot(cgraph_aggregated, edge.arrow.size=0.25,edge.arrow.mode = "-", vertex.label = V(cgraph_aggregated)$label, vertex.label.cex = 0.65, vertex.label.font = 2, main = "Which Participant has the most influence on the weekends?" ) 
+#Font size of 0.65 with Bond font using vertex.label cex and font
 
 ```
 
@@ -310,16 +312,18 @@ plot(cgraph_aggregated, edge.arrow.size=0.25,edge.arrow.mode = "-", vertex.label
 Below, we examine the attributes of the top 10% vertices based on the updated EigenVector Centrality. We will only display the index with the eigenvalue more than the 90th percentile.
 
 ``` {r, echo = FALSE}
-vertex_attr(cgraph_aggregated, index = V(cgraph_aggregated)$size*0.065 > quantile_graph_aggregated[10])
+vertex_attr(cgraph_aggregated, index = V(cgraph_aggregated)$size*0.065 > quantile_graph_aggregated[10]) 
+#Check vertice attributes based on the index condition
 ```
 
 ### Statistical Plot of Eigenvector Score against Participant's attributes
 
 To plot the statistical plot, we first need to convert the graph data frame to the normal data frame. The `as.data.frame` function is used to perform the conversion.
 
-Through the vertices attributes of the top 10% of Eigenvector Centrality Score, we see that most participants who have high influence over the weekends attained an Education Level of `High School or College" "Bachelors` and the half of the participants fall within the age range of `56-60` and `21-25`. We will now analyse to see if these 2 factors affect how influential a participant is during the weekend. To combine the two plots together, we will use the `combine_plot` function which is a Wrapper around `plot_grid` that will return a plotgrid along with a combination of title, caption, and annotation label.
+Through the vertices attributes of the top 10% of Eigenvector Centrality Score, we see that most participants who have high influence over the weekends attained an Education Level of `High School or College" "Bachelors` and the half of the participants fall within the age range of `56-60` and `21-25`. We will now analyse to see if these 2 factors affect how influential a participant is during the weekend. A non-parametric test is conducted to provided statistical evidence whether to reject or accept the null hypothesis.
 
-`Patchwork` library is used to plot both statistical plot on top of one another.
+To combine the two plots together, we will use the `patchwork` library that expands the API to allow for arbitrarily complex composition of plots by, among others, providing mathematical operators for combining multiple plots.
+
 
 ``` {r}
 
@@ -332,7 +336,7 @@ p1 <- ggbetweenstats(
   xlab = "Education Level",
   ylab = "EV Centrality \nScore",
   title = "Will your Influence increase based on Education Level?",
-  type = "np",
+  type = "np", #conduct non-parametric test
   conf.level = 0.95,
   mean.ci = TRUE,
   package = "ggsci",
@@ -348,7 +352,7 @@ p2<-  ggbetweenstats(
   xlab = "Age Group",
   ylab = "EV Centrality \nScore",
   title = "Will your Influence increase based on Age?",
-  type = "np",
+  type = "np", #conduct non-parametric test
   conf.level = 0.95,
   mean.ci = TRUE,
   package = "ggsci",
@@ -361,9 +365,9 @@ p2<-  ggbetweenstats(
 p1/plot_spacer()/p2 + plot_annotation(
     title ="Higher Qualification or Age have better influence?",
     caption = 'Vast Challenge 2022',
-    theme = theme(plot.title = element_text(size = 14, face = "bold"))
+    theme = theme(plot.title = element_text(size = 14))
   ) &
-    theme(plot.title = element_text(face = 'bold'))
+    theme(plot.title = element_text(face = 'bold')) #apply bold to all plot.title
 
 
 ```
@@ -409,7 +413,7 @@ quantile_graph_aggregated_workday <- quantile(V(cgraph_aggregated_workday)$size,
          )
 
 
-V(cgraph_aggregated_workday)$color <- ifelse (V(cgraph_aggregated_workday)$size > quantile_graph_aggregated_workday[10], "yellow", "grey") 
+V(cgraph_aggregated_workday)$color <- ifelse (V(cgraph_aggregated_workday)$size > quantile_graph_aggregated_workday[10], "darkgoldenrod3", "azure3") 
 E(cgraph_aggregated_workday)$color <- "grey" #all Edges to be grey
 V(cgraph_aggregated_workday)$size <- V(cgraph_aggregated_workday)$size/0.075
 V(cgraph_aggregated_workday)$label <- ifelse (V(cgraph_aggregated_workday)$size*0.075 > quantile_graph_aggregated_workday[10],V(cgraph_aggregated_workday)$name,NA)
@@ -432,7 +436,7 @@ vertex_attr(cgraph_aggregated_workday, index = V(cgraph_aggregated_workday)$size
 
 To plot the statistical plot, we first need to convert the graph data frame to the normal data frame. The `as.data.frame` function is used to perform the conversion.
 
-Through the vertices attributes of the top 10% of Eigenvector Centrality Score, we see that most participants who have high influence over the working dats **do not have kids** and most of them have high `joviality`. We will now analyse to see if these 2 factors affect how influential a participant is during working days. To combine the two plots together, we will use the `combine_plot` function which is a Wrapper around `plot_grid` that will return a plotgrid along with a combination of title, caption, and annotation label.
+Through the vertices attributes of the top 10% of Eigenvector Centrality Score, we see that most participants who have high influence over the working dats **do not have kids** and most of them have high `joviality`. We will now analyse to see if these 2 factors affect how influential a participant is during working days. To combine the two plots together, we will use the `patchwork` library that expands the API to allow for arbitrarily complex composition of plots by, among others, providing mathematical operators for combining multiple plots.
 
 ``` {r}
 c_graph_analysis_workday <- as.data.frame(cgraph_workday)
@@ -467,9 +471,9 @@ p2<-  ggscatterstats(
 p1/plot_spacer()/p2 + plot_annotation(
     title ="Does having Kids or Being Happy affect your Influence?",
     caption = 'Vast Challenge 2022',
-    theme = theme(plot.title = element_text(size = 14, face = "bold"))
+    theme = theme(plot.title = element_text(size = 14))
   ) &
-    theme(plot.title = element_text(face = 'bold'))
+    theme(plot.title = element_text(face = 'bold')) #Apply Bold to all plot.title
 
 ```
 
@@ -489,7 +493,7 @@ plot(cgraph_aggregated_workday, edge.arrow.size=0.25,edge.arrow.mode = "-", vert
 
 ### Analysis of Plot
 
-From the above plots, we can infer that the **9** participants who are deemed influential based on their EigenVector Score have high joviality and without kids. From the statistical plot, the plot of `have_kids` shows a p-value of more than 0.05 and therefore we fail to reject the null hypothesis that there is no relationship between this two variables. For the plot on `Joviality` since the p-value is less than 0.05, we reject the null hypothesis and conclude that there is a relationship between Joviality and Eigenvector Centrality score. The higher the joviality, the higher your influence is on the weekday.
+From the above plots, we can infer that the **9** participants who are deemed influential based on their EigenVector Score have high joviality and without kids. From the statistical plot, the plot of `have_kids` shows a p-value of more than 0.05 and therefore we **fail to reject the null hypothesis** that there is no relationship between this two variables. For the plot on `Joviality` since the p-value is less than 0.05, we **reject the null hypothesis** and conclude that there is a relationship between Joviality and Eigenvector Centrality score. The higher the joviality, the higher your influence is on the weekday.
 
 Influence on weekdays can also highlight the person influence in their workplace. There is a possibility that these participants are holding on the a management level position within the workplace to affect certain level of influence.
 
