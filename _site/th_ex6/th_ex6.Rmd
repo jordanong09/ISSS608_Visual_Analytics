@@ -1,0 +1,504 @@
+---
+title: "Take-Home Exercise 6"
+description: |
+  Visualising Social Network.
+author:
+  - name: Ong Zhi Rong Jordan
+    url: https://example.com/norajones
+    affiliation: Spacely Sprockets
+    affiliation_url: https://example.com/spacelysprokets
+date: "`r Sys.Date()`"
+output: 
+  distill::distill_article:
+    toc: true
+    toc_depth: 2
+    code_folding: true
+    
+---
+
+# OVERVIEW
+
+## Introduction
+
+With reference to bullet point 2 of Challenge 1 of VAST Challenge 2022, I will be revealing the:
+
+  - Community Interactions of the city of Engagement, Ohio USA by employing social network analysis approach.
+
+## Methodology
+
+To analyse the social interaction of the city of Engagement, I will be using the data from the Social Network journal to identify the interaction based on the different types of days and to use the Participant attributes to identify if there are any relation between their interactions and attributes.
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(eval = TRUE,
+                      echo = TRUE,
+                      include = TRUE,
+                      warning = FALSE,
+                      message = FALSE,
+                      fig.asp = 0.618,
+                      fig.width = 12,
+                      layout = "l-body-outset",
+                      fig.retina = 3)
+```
+
+# Data Preparation
+
+## Installing and Loading of Packages
+
+The following code chunks will install and load the required packages. 
+
+``` {r}
+packages = c('igraph', 'tidygraph', 
+             'ggraph','lubridate', 'clock',
+             'tidyverse', 'ggmap', 'ggstatsplot', 'ggside', 'ggdist', 'patchwork')
+for(p in packages){
+  if(!require(p, character.only = T)){
+    install.packages(p)
+  }
+  library(p, character.only = T)
+}
+
+```
+
+## Loading Raw Data Set
+
+The `read_csv` function is used to imports data into R as a tibble instead of `read.csv` that imports a regular old R data frame instead.
+
+```{r, eval = FALSE}
+Part_nodes <- read_csv("raw_data/Participants.csv")
+Social_edge <- read_csv("raw_data/SocialNetwork.csv")
+```
+
+## Data Wrangling
+
+The columns and values of participants file are renamed with below code chunk for better formatting and ease of reading. 
+Credits to Leslie for the code chunk below!
+
+``` {r, eval = FALSE}
+# rename columns
+Part_nodes <- Part_nodes %>%
+  rename('Participant_ID' = 'participantId', 
+         'Household_Size' = 'householdSize', 
+         'Have_Kids' = 'haveKids', 
+         'Age' = 'age', 
+         'Education_Level' = 'educationLevel', 
+         'Interest_Group' = 'interestGroup', 
+         'Joviality' = 'joviality')
+
+#rename value 
+Part_nodes$Education_Level <- sub('HighSchoolOrCollege', 
+                                    'High School or College',
+                                    Part_nodes$Education_Level)
+
+brks <- c(17, 20, 25, 30, 35, 40, 45, 50, 55, 60)
+grps <- c('20 & Below', '21-25', '26-30', '31-35', '36-40', '41-45', 
+          '46-50', '51-55', '56-60')
+
+Part_nodes$Age_Group <- cut(Part_nodes$Age, breaks=brks, labels = grps)
+
+
+```
+To identify the different day types for the analysis, the `lubridate` package is used. the `wday` function with `label = TRUE and abbr = FALSE` return the full day name (etc. Monday, Tuesday), the `month` function return the numeric number of the month and the `week` function return the numeric week number of the year.
+
+Once we find the weekday type, we will classify the different days by `Working Days` or `Non-Working Days` using the `case_when` function.
+
+```{r, eval = FALSE}
+work_day <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
+
+Social_edge_selected <- Social_edge %>%
+  mutate (Weekday = wday(timestamp,
+                         label = TRUE,
+                         abbr = FALSE)) %>%
+  mutate (month = month(timestamp,
+                        label = FALSE)) %>%
+   mutate (week = lubridate::week(timestamp)) %>%
+  mutate (work_day = case_when(
+    Weekday %in% work_day ~ "Working Days",
+    TRUE ~ "Non-Working Days"
+  ))
+
+```
+
+## Preparation of Edges
+
+Since we are plotting two different social network graph, two different edges data table must be created. From the above edge file created, the first edge file will consist of `Non-Working Days` in the 2nd week of March, and using the summarise function to find out the number of times the interaction takes place. Using the `filter` function to only retrieve edges that has more than 1 interaction. The same preparation will be done for the edges that consists of `Working Days`
+
+``` {r, eval = FALSE}
+Social_edge_aggregated <- Social_edge_selected %>% 
+  filter (work_day == "Non-Working Days", month == 3, week == 10) %>%
+  group_by(participantIdFrom,participantIdTo) %>%
+  summarise(Weight = n()) %>%
+  filter (participantIdFrom != participantIdTo) %>%
+  filter (Weight > 1) %>%
+  ungroup
+
+Social_edge_workday <- Social_edge_selected %>% 
+  filter (work_day == "Working Days", month == 3, week == 10) %>%
+  group_by(participantIdFrom,participantIdTo) %>%
+  summarise(Weight = n()) %>%
+  filter (participantIdFrom != participantIdTo) %>%
+  filter (Weight > 1) %>%
+  ungroup
+
+```
+
+## Preparation of Nodes
+
+Since we are plotting two different social network graph, two different nodes data table must be created. The nodes within the node file must be unique and therefore the `filter` function is used to extract only the nodes that appear based on the `source` and `target`.
+
+``` {r, eval = FALSE}
+
+Part_nodes_aggregated <- Part_nodes %>%
+  filter (Participant_ID  %in% c(Social_edge_aggregated$participantIdFrom, Social_edge_aggregated$participantIdTo))
+
+Part_nodes_workday <- Part_nodes %>%
+  filter (Participant_ID  %in% c(Social_edge_workday$participantIdFrom, Social_edge_workday$participantIdTo))
+
+saveRDS(Part_nodes_aggregated, "Part_nodes_aggregated.rds")
+saveRDS(Part_nodes_workday, "Part_nodes_workday.rds")
+
+```
+
+``` {r, include = FALSE}
+Part_nodes_aggregated <- readRDS("data/Part_nodes_aggregated.rds")
+Part_nodes_workday <- readRDS("data/Part_nodes_workday.rds")
+```
+
+## Distribution of Nodes
+
+From the plots below, there is no significant difference in the participants `Age Group`, `Joviality` and `Education Level`. We can also identify that most participants attained a `High School or College` in Education Level. This might skew the overall outcome subsequently.
+
+``` {r}
+
+weekend_p1 <- Part_nodes_aggregated %>%
+  mutate(Education= fct_infreq(Education_Level)) %>%
+  ggplot(aes(x= Education)) +
+  geom_bar(fill= '#808de8') +
+  labs(y= 'No. of\nResidents', subtitle = "Distribution of Residents' Education Level") +
+  theme(axis.title.y= element_text(angle=0), axis.ticks.x= element_blank(),
+        panel.background= element_blank(), axis.line= element_line(color= 'bisque3'),
+        plot.subtitle = element_text(color = "dimgrey", size = 12, face = "bold", hjust=0.5))
+
+weekend_p2 <- ggplot(data= Part_nodes_aggregated, 
+       aes(x= Age_Group)) +
+  geom_bar(fill= '#6eba6a') +
+  ylim(0, 150)  +
+  labs(y= 'No. of\nResidents', x= 'Age Group',
+       subtitle = "Distribution of Residents' Age") +
+  theme(axis.title.y= element_text(angle=0), axis.ticks.x= element_blank(),
+        panel.background= element_blank(), axis.line= element_line(color= 'bisque3'),
+        plot.subtitle = element_text(color = "dimgrey", size = 12, face = "bold", hjust=0.5))
+
+weekend_p3 <-  ggplot(data= Part_nodes_aggregated, 
+       aes(x= Joviality)) +
+  geom_histogram (binwidth=0.1, fill="#69b3a2", color="#e9ecef", alpha=0.9) +
+  labs(y= 'No. of\nResidents', x= 'Joviality',
+       subtitle = "Distribution of Residents' Joviality") +
+  theme(axis.title.y= element_text(angle=0), axis.ticks.x= element_blank(),
+        panel.background= element_blank(), axis.line= element_line(color= 'bisque3'),
+        plot.subtitle = element_text(color = "dimgrey", size = 12, face = "bold", hjust=0.5))
+
+(weekend_p1+weekend_p2)/weekend_p3 + plot_annotation(
+    title ="Distribution of Weekend Participant's Attribute",
+    caption = 'Vast Challenge 2022'
+  ) &
+    theme(plot.title = element_text(size = 14, face = 'bold'))
+
+```
+
+``` {r}
+
+
+weekday_p1 <- Part_nodes_workday %>%
+  mutate(Education= fct_infreq(Education_Level)) %>%
+  ggplot(aes(x= Education)) +
+  geom_bar(fill= '#808de8') +
+  labs(y= 'No. of\nResidents', subtitle = "Distribution of Residents' Education Level") +
+  theme(axis.title.y= element_text(angle=0), axis.ticks.x= element_blank(),
+        panel.background= element_blank(), axis.line= element_line(color= 'bisque3'),
+        plot.subtitle = element_text(color = "dimgrey", size = 12, face = "bold", hjust=0.5))
+
+weekday_p2 <- ggplot(data= Part_nodes_workday, 
+       aes(x= Age_Group)) +
+  geom_bar(fill= '#6eba6a') +
+  ylim(0, 150)  +
+  labs(y= 'No. of\nResidents', x= 'Age Group',
+       subtitle = "Distribution of Residents' Age") +
+  theme(axis.title.y= element_text(angle=0), axis.ticks.x= element_blank(),
+        panel.background= element_blank(), axis.line= element_line(color= 'bisque3'),
+        plot.subtitle = element_text(color = "dimgrey", size = 12, face = "bold", hjust=0.5))
+
+weekday_p3 <-  ggplot(data= Part_nodes_workday, 
+       aes(x= Joviality)) +
+  geom_histogram (binwidth=0.1, fill="#69b3a2", color="#e9ecef", alpha=0.9) +
+  labs(y= 'No. of\nResidents', x= 'Joviality',
+       subtitle = "Distribution of Residents' Joviality") +
+  theme(axis.title.y= element_text(angle=0), axis.ticks.x= element_blank(),
+        panel.background= element_blank(), axis.line= element_line(color= 'bisque3'),
+        plot.subtitle = element_text(color = "dimgrey", size = 12, face = "bold", hjust=0.5))
+
+(weekday_p1+weekday_p2)/weekday_p3 + plot_annotation(
+    title ="Distribution of Weekday Participant's Attribute",
+    caption = 'Vast Challenge 2022'
+  ) &
+    theme(plot.title = element_text(size = 14, face = 'bold'))
+
+```
+
+## Creating the graph dataframe
+
+Before plotting the graph, we need to create a graph data frame using the `nodes` and `edges` data frame. The `graph_from_data_frame` function creates an igraph graph from one or two data frames containing the (symbolic) edge list and edge/vertex attributes.
+
+``` {r, eval = FALSE}
+cgraph <- graph_from_data_frame (Social_edge_aggregated,
+                           vertices = Part_nodes_aggregated) %>%
+  as_tbl_graph()
+
+
+cgraph_workday <- graph_from_data_frame (Social_edge_workday,
+                           vertices = Part_nodes_workday) %>%
+  as_tbl_graph()
+
+```
+
+``` {r, include = FALSE}
+cgraph <- readRDS("data/cgraph.rds")
+cgraph_workday <- readRDS("data/cgraph_workday.rds")
+```
+
+# Visulisation and Analysis
+
+## Plotting of Social Network using Eigenvector Centrality
+
+### Social Interaction on a Non-Working Day
+
+Due to the vast amount of edges within the interaction, we will focus only the top 10% vertices based on their eigenvector centrality score (top 10% influential people). The `quantile` function is used to identify the quantile based on the `eigen_centrality` of the graph. Once we identify the vertices, we will remove the other vertices using the `delete_vertices` function. 
+
+For the graph, we will use the The Fruchterman-Reingold layout algorithm and `set.seed` function to ensure the plot remains the same. 
+
+``` {r}
+
+quantile_graph <- quantile(eigen_centrality(cgraph)$vector,
+         probs = seq(0, 1, 1/10)
+         )
+V(cgraph)$size = eigen_centrality(cgraph)$vector
+
+cgraph_aggregated <- delete_vertices(cgraph, V(cgraph)[size < quantile_graph[10]])
+
+
+set.seed (1234)
+layout1 <- layout_with_fr(cgraph_aggregated)
+
+quantile_graph_aggregated <- quantile(V(cgraph_aggregated)$size, #identify top 10% of the new vertices
+         probs = seq(0, 1, 1/10)
+         )
+
+
+V(cgraph_aggregated)$color <- ifelse (V(cgraph_aggregated)$size > quantile_graph_aggregated[10], "yellow", "grey") #color yellow if vertices is top 10%
+E(cgraph_aggregated)$color <- "grey"
+V(cgraph_aggregated)$size <- V(cgraph_aggregated)$size/0.065 #Increase the size of nodes based on their centrality score, only those with high score will be visible
+
+V(cgraph_aggregated)$label <- ifelse (V(cgraph_aggregated)$size*0.065 > quantile_graph_aggregated[10],V(cgraph_aggregated)$name,NA)
+#label the vertices if vertices belongs to the top 10%
+
+plot(cgraph_aggregated, edge.arrow.size=0.25,edge.arrow.mode = "-", vertex.label = V(cgraph_aggregated)$label, vertex.label.cex = 0.65, vertex.label.font = 2, main = "Which Participant has the most influence on the weekends?" ) 
+
+```
+
+### Vertices Attributes
+
+Below, we examine the attributes of the top 10% vertices based on the updated EigenVector Centrality. We will only display the index with the eigenvalue more than the 90th percentile.
+
+``` {r, echo = FALSE}
+vertex_attr(cgraph_aggregated, index = V(cgraph_aggregated)$size*0.065 > quantile_graph_aggregated[10])
+```
+
+### Statistical Plot of Eigenvector Score against Participant's attributes
+
+To plot the statistical plot, we first need to convert the graph data frame to the normal data frame. The `as.data.frame` function is used to perform the conversion.
+
+Through the vertices attributes of the top 10% of Eigenvector Centrality Score, we see that most participants who have high influence over the weekends attained an Education Level of `High School or College" "Bachelors` and the half of the participants fall within the age range of `56-60` and `21-25`. We will now analyse to see if these 2 factors affect how influential a participant is during the weekend. To combine the two plots together, we will use the `combine_plot` function which is a Wrapper around `plot_grid` that will return a plotgrid along with a combination of title, caption, and annotation label.
+
+`Patchwork` library is used to plot both statistical plot on top of one another.
+
+``` {r}
+
+c_graph_analysis <- as.data.frame(cgraph)
+
+p1 <- ggbetweenstats(
+  data    = c_graph_analysis,
+  x       = Education_Level,
+  y       = size,
+  xlab = "Education Level",
+  ylab = "EV Centrality \nScore",
+  title = "Will your Influence increase based on Education Level?",
+  type = "np",
+  conf.level = 0.95,
+  mean.ci = TRUE,
+  package = "ggsci",
+  palette = "default_jco"
+) +
+  ggplot2::theme(axis.title.y= element_text(angle=0, size = 9),axis.title.x= element_text(size = 9),
+                 plot.title = element_text(color = "dimgrey", size = 12, hjust=0.5))
+
+p2<-  ggbetweenstats(
+  data    = c_graph_analysis,
+  x       = Age_Group,
+  y       = size,
+  xlab = "Age Group",
+  ylab = "EV Centrality \nScore",
+  title = "Will your Influence increase based on Age?",
+  type = "np",
+  conf.level = 0.95,
+  mean.ci = TRUE,
+  package = "ggsci",
+  palette = "nrc_npg"
+)+
+  ggplot2::theme(axis.title.y= element_text(angle=0, size = 9),axis.title.x= element_text(size = 9),
+                 plot.title = element_text(color = "dimgrey", size = 12, hjust=0.5)) 
+
+
+p1/plot_spacer()/p2 + plot_annotation(
+    title ="Higher Qualification or Age have better influence?",
+    caption = 'Vast Challenge 2022',
+    theme = theme(plot.title = element_text(size = 14, face = "bold"))
+  ) &
+    theme(plot.title = element_text(face = 'bold'))
+
+
+```
+
+
+### Cluster Detection on a Non-Working Day
+
+By using the `cluster_edge_betweenness` function, we will be able to detect any possible cluster based on the `betweeness` score of the vertices. From the graph below, we can see that there are 11 clusters found within the interaction. 
+
+``` {r}
+GNC <- cluster_edge_betweenness(cgraph_aggregated, weights = NULL)
+V(cgraph_aggregated)$color <-membership(GNC)              #Plot setting specifying the coloring of vertices by community
+cgraph_aggregated$palette <- diverging_pal(length(GNC)) 
+plot(cgraph_aggregated, edge.arrow.size=0.25,edge.arrow.mode = "-", vertex.label = NA, main = "How many Social Groups within the community?")
+
+```
+
+### Analysis of Plot
+
+From the above plots, we can infer that the **9** participants who are deemed influential based on their EigenVector Score have no relationship based on their attributes. From the statisical plot, both plots shows a P value of more than 0.05 and therefore we fail to reject the null hypothesis that there is no relationship between influential and participants attributes. 
+
+We can also infer that these participants **might** be working in pubs/restaurants and therefore have high interaction with people since the previous exercise concludes the high social activity in pubs and restaurants during the weekend. With the clusters, we can possibly infer that these people might be **working in different pubs/restaurants** or are in **different social circles**.            
+
+### Social Interaction on a Working Day (Mon-Fri)
+
+The preparation of graph will be similar to the preparation of the `Non-Working Day` graph.
+
+``` {r}
+quantile_graph_workday <- quantile(eigen_centrality(cgraph_workday)$vector,
+         probs = seq(0, 1, 1/10)
+         )
+
+V(cgraph_workday)$size = eigen_centrality(cgraph_workday)$vector
+
+cgraph_aggregated_workday <- delete_vertices(cgraph_workday, V(cgraph_workday)[size < quantile_graph_workday[10]])
+
+
+set.seed (1234)
+layout1 <- layout_with_fr(cgraph_workday)
+
+quantile_graph_aggregated_workday <- quantile(V(cgraph_aggregated_workday)$size,
+         probs = seq(0, 1, 1/10)
+         )
+
+
+V(cgraph_aggregated_workday)$color <- ifelse (V(cgraph_aggregated_workday)$size > quantile_graph_aggregated_workday[10], "yellow", "grey") 
+E(cgraph_aggregated_workday)$color <- "grey" #all Edges to be grey
+V(cgraph_aggregated_workday)$size <- V(cgraph_aggregated_workday)$size/0.075
+V(cgraph_aggregated_workday)$label <- ifelse (V(cgraph_aggregated_workday)$size*0.075 > quantile_graph_aggregated_workday[10],V(cgraph_aggregated_workday)$name,NA)
+
+plot(cgraph_aggregated_workday, edge.arrow.size=0.25,edge.arrow.mode = "-", vertex.label = V(cgraph_aggregated_workday)$label, vertex.label.cex = 0.65, vertex.label.font = 2 )
+
+```
+
+
+### Vertices Attributes
+
+Below, we examine the attributes of the top 10% vertices based on the updated EigenVector Centrality. We will only display the index with the eigenvalue more than the 90th percentile.
+
+``` {r}
+vertex_attr(cgraph_aggregated_workday, index = V(cgraph_aggregated_workday)$size*0.075 > quantile_graph_aggregated_workday[10])
+``` 
+
+
+### Statistical Plot of Eigenvector Score against Participant's attributes (Working Day)
+
+To plot the statistical plot, we first need to convert the graph data frame to the normal data frame. The `as.data.frame` function is used to perform the conversion.
+
+Through the vertices attributes of the top 10% of Eigenvector Centrality Score, we see that most participants who have high influence over the working dats **do not have kids** and most of them have high `joviality`. We will now analyse to see if these 2 factors affect how influential a participant is during working days. To combine the two plots together, we will use the `combine_plot` function which is a Wrapper around `plot_grid` that will return a plotgrid along with a combination of title, caption, and annotation label.
+
+``` {r}
+c_graph_analysis_workday <- as.data.frame(cgraph_workday)
+
+p1 <- ggbetweenstats(
+  data    = c_graph_analysis_workday,
+  x       = Have_Kids,
+  y       = size,
+  xlab = "Have Kids",
+  ylab = "EV Centrality \nScore",
+  title = "Will Kids affect your Influence?",
+  type = "np",
+  conf.level = 0.95,
+  mean.ci = TRUE,
+  package = "ggsci",
+  palette = "default_jco"
+) +
+  ggplot2::theme(axis.title.y= element_text(angle=0, size = 9),axis.title.x= element_text(size = 9),
+                 plot.title = element_text(color = "dimgrey", size = 12, hjust=0.5))
+
+p2<-  ggscatterstats(
+  data    = c_graph_analysis_workday,
+  x       = Joviality,
+  y       = size,
+  title = "Does happiness affect your Influence?",
+  xlab = "Joviality",
+  ylab = "EV Centrality \nScore",
+)+
+  ggplot2::theme(axis.title.y= element_text(angle=0, size = 9),axis.title.x= element_text(size = 9),
+                 plot.title = element_text(color = "dimgrey", size = 12, hjust=0.5))
+
+p1/plot_spacer()/p2 + plot_annotation(
+    title ="Does having Kids or Being Happy affect your Influence?",
+    caption = 'Vast Challenge 2022',
+    theme = theme(plot.title = element_text(size = 14, face = "bold"))
+  ) &
+    theme(plot.title = element_text(face = 'bold'))
+
+```
+
+
+### Cluster Detection on a Working Day
+
+By using the `cluster_edge_betweenness` function, we will be able to detect any possible cluster based on the `betweeness` score of the vertices. From the graph below, we can see that there are 3 clusters found within the interaction. 
+
+``` {r}
+
+GNC1 <- cluster_edge_betweenness(cgraph_aggregated_workday, weights = NULL)
+V(cgraph_aggregated_workday)$color <-membership(GNC1)              #Plot setting specifying the coloring of vertices by community
+cgraph_aggregated_workday$palette <- diverging_pal(length(GNC1))   
+plot(cgraph_aggregated_workday, edge.arrow.size=0.25,edge.arrow.mode = "-", vertex.label = NA, main = "How many influential industries within \n City of Engagement?")
+
+```
+
+### Analysis of Plot
+
+From the above plots, we can infer that the **9** participants who are deemed influential based on their EigenVector Score have high joviality and without kids. From the statistical plot, the plot of `have_kids` shows a p-value of more than 0.05 and therefore we fail to reject the null hypothesis that there is no relationship between this two variables. For the plot on `Joviality` since the p-value is less than 0.05, we reject the null hypothesis and conclude that there is a relationship between Joviality and Eigenvector Centrality score. The higher the joviality, the higher your influence is on the weekday.
+
+Influence on weekdays can also highlight the person influence in their workplace. There is a possibility that these participants are holding on the a management level position within the workplace to affect certain level of influence.
+
+From the cluster detection, we can also possibly identify 3 different industries that exist within the City that hold the top 10% Eigenvector Centrality Score. These industries might play an influential role or key businesses within the City of Engagement due to how much influence they have during the Working Days.
+
+# Learning Points
+
+Throughout this exercise, I was able to utilize the many different plots (network and statistic) to identify trends/pattern through the social network of the Participants. Instead of using the full `vertices` and `edges`, one must understand the outcome of the social network plot and reduce the network size based on the required analysis. 
+
+
+
+To further improve the analysis, `income` can be considered to validate if the influential participants are high-earners and therefore have a higher chance that they are holding on to a managerial position in the company.
