@@ -1,0 +1,436 @@
+---
+title: "Time Series Forecasting"
+description: |
+  Store-Sales Time Series Forcasting from Kaggle.
+author:
+  - name: Ong Zhi Rong Jordan 
+    url: https://example.com/norajones
+    affiliation: Spacely Sprockets
+    affiliation_url: https://example.com/spacelysprokets
+date: "`r Sys.Date()`"
+output: distill::distill_article
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(eval = TRUE,
+                      echo = TRUE,
+                      include = TRUE,
+                      warning = FALSE,
+                      message = FALSE)
+```
+
+
+## Introduction
+
+This study will be forcusing on time-series forecasting for store sales. The data is extracted from [`Kaggle`](https://www.kaggle.com/competitions/store-sales-time-series-forecasting/data). The data is provided by an Ecuador company known as [Corporación Favorita](https://www.corporacionfavorita.com/en/).
+
+
+## Methodology
+
+I will be exploring the `modeltime` library to conduct nested forecasting for the dataset provided.
+
+## Dataset
+
+There are a total of 54 stores and 33 product families in the data. The time series starts from 01 Jan 2013 and finishes in 31 Aug 2017. The data is splitted to `train` and `test` data, and the dates in the test data are 15 days after the last date in the training data. 
+
+
+The dataset consist of **6** different worksheets. The description of each worksheets is as such:
+
+* `Train.csv` contains time series of the stores and the product families combination. 
+  + The **store_nbr** column identifies the store at which the products are sold.
+  + The **family** column identifies the type of product sold.
+  + The **sales** column gives the total sales for a product family at a particular store at a given date. Fractional values are possible since products can be sold in fractional units (1.5 kg of cheese, for instance, as opposed to 1 bag of chips).
+  + The **onpromotion** column gives the total number of items in a product family that were being promoted at a store at a given date.
+  
+* `test.csv` contains similar features as the training data. 
+  + The **dates** in the test data are for the 15 days after the last date in the training data.
+
+* `Stores.csv` contains the metadata of all the stores participating in this analysis. 
+  + The **store_nbr** column identifies the store at which the products are sold.
+  + The **city** column identifies the city the store is located in.
+  + The **state** column identifies the state the store is located in.
+  + The **type** column identifies the type of the store.
+  + The **cluster** column highlights the cluster the store belongs to.
+
+* `Transactions.csv` contains the number of transactions recorded by stores throughout the period of analysis. 
+
+* `Oil.csv` contains the daily oil price. Includes values during both the train and test data time frames.
+
+* `holidays_events.csv` contains all the different holidays and event that happen throughout the period of analysis.
+  + The **transferred** column indicate if the holiday was celebrated on the actual day or was transferred to another day.
+
+
+In addition to the data provided through the data set, there are two pointers to be aware of:
+
+* Wages in the public sector are paid every two weeks on the 15 th and on the last day of the month. Supermarket sales could be affected by this.
+
+* A magnitude 7.8 earthquake struck Ecuador on April 16, 2016. People rallied in relief efforts donating water and other first need products which greatly affected supermarket sales for several weeks after the earthquake
+  
+## Libraries 
+
+These are the libraries used for the analysis. 
+
+```{r}
+
+pacman::p_load(tidyverse, tidymodels, 
+               timetk, modeltime,ggstatsplot,lubridate, trelliscopejs, seasonal,
+               tsibble, feasts, fable, forecast,psych, plotly)
+
+```
+
+
+```{r}
+
+oil <- read_csv ("rawdata/oil.csv")
+holiday <- read_csv ("rawdata/holidays_events.csv")
+test <- read_csv ("rawdata/test.csv")
+train <- read_csv ("rawdata/train.csv")
+stores <- read_csv ("rawdata/stores.csv")
+transacation <- read_csv ("rawdata/transactions.csv")
+```
+
+
+```{r}
+
+describe(oil)
+describe (train)
+
+```
+
+```{r}
+oilplot <- ggplot(oil,aes(x = date,y=dcoilwtico)) +
+  geom_line(colour = "#468499") +
+  ylim(25,115) +
+  theme_classic() +
+  labs(y = "Oil Price", x = "Date", title = "Daily Oil Price from 2013 - 2017", subtitle = "Without Linear Interplolation") +
+  theme(axis.title.y = element_text(angle=0))
+
+oilplot 
+
+```
+
+```{r}
+
+ts_oil <- oil %>%
+  as_tsibble(index = `date`)
+
+ts_oil$dcoilwtico <- (na.interp(ts_oil$dcoilwtico))
+
+
+oilplot <- ggplot(ts_oil,aes(x = date,y=dcoilwtico)) +
+  geom_line(colour = "#D2288A") +
+  ylim(25,115) +
+  theme_classic() +
+  labs(y = "Oil Price", x = "Date", title = "Daily Oil Price from 2013 - 2017", subtitle = "With Linear Interplolation") +
+  theme(axis.title.y = element_text(angle=0))
+
+oilplot 
+```
+
+We assume that the oil prices does not change during the weekends or holidays. Therefore, we use the `fill` function to fill up the weekends NA value based on the previous oil price values.
+
+```{r}
+
+ts_oil_fill <- ts_oil %>%
+  complete(date = seq.Date(min(date), max(date), by = "day" )) %>%
+  fill (dcoilwtico)
+
+
+ts_oilfill <- ggplot(ts_oil_fill,aes(x = date,y=dcoilwtico)) +
+  geom_line(colour = "#D2288A") +
+  ylim(25,115) +
+  theme_classic() +
+  labs(y = "Oil Price", x = "Date", title = "Daily Oil Price from 2013 - 2017", subtitle = "With Linear Interplolation and fill") +
+  theme(axis.title.y = element_text(angle=0))
+
+ts_oilfill
+```
+
+
+
+
+
+
+## Examining of Train Data
+
+```{r}
+
+describe (train)
+
+train$store_nbr <- as.character(train$store_nbr) #convert store_nbr to categorical format
+
+```
+
+
+```{r}
+
+new_train <- nest(train, data = !one_of(c("store_nbr", "family")))
+
+```
+
+```{r}
+
+train_plot <- function(data) {
+  plot_ly(data = data, x = ~date, y = ~sales, type = 'scatter', mode = 'lines') %>%
+    layout(showlegend = FALSE)
+}
+
+
+new_train <- new_train %>%
+  mutate(data_plot = map_plot(data, train_plot)) 
+
+```
+
+```{r}
+
+new_train %>%
+  trelliscope(name = "sales", nrow = 1, ncol = 4)
+
+```
+
+Based on our analysis on the trelliscope plot, we are able to identify certain family items that have 0 sales throughout the period of study for certain stores. We will assume that these stores do not sell these category of items and therefore will remove these rows for the analysis and append these rows as part of the test results.
+
+```{r}
+
+train_test <- train %>%
+  group_by (store_nbr, family) %>%
+  summarise (total_sales = sum(sales)) %>%
+  filter (total_sales == 0) %>%
+  ungroup()
+
+train_test <- train_test %>%
+  mutate (remove = "Yes") %>%
+  select (-total_sales)
+
+training_data <- train %>%
+  left_join(train_test, by = c("store_nbr", "family")) 
+
+training_data$remove[is.na(training_data$remove)] <- "No"
+
+training_data <- training_data %>%
+  filter (remove == "No")
+
+
+```
+
+
+## Relationship between Sales and Oil Prices
+
+```{r}
+
+train_correlation <- training_data %>%
+  group_by (date) %>%
+  summarise (total_sales = sum(sales)) %>%
+  ungroup()
+
+train_oil <- train_correlation %>%
+  left_join (ts_oil_fill, by = "date")
+```
+
+
+```{r}
+
+ggscatterstats(
+  data  = train_oil,
+  x     = total_sales,
+  y     = dcoilwtico,
+  xlab  = "Total Sales",
+  ylab  = "Daily Oil Price",
+  title = "Checking for Correlation between Sales and Oil prices ",
+  type = "np"
+)
+
+```
+
+
+
+## Family Product against oil prices
+
+In this analysis, we will analyse if the sales of every product family is affected by oil prices.
+
+```{r}
+
+train_yearlysales <- training_data %>%
+  mutate(weekday = wday(date,
+                        label = TRUE, abbr = FALSE)) %>%
+  mutate (Month = month(date, label = TRUE)) %>%
+  mutate (Year = year(date)) %>%
+  mutate (Day = day(date)) %>%
+  group_by(Month,Year,Day) %>%
+  summarise (total_sales = sum(sales)) %>%
+  ungroup()
+
+```
+
+```{r, fig.width = 9, fig.height=6}
+
+train_yearlysales$Year <- as.character(train_yearlysales$Year)
+
+train_yearlysales %>%
+  group_by(Year,Month) %>%
+  summarise (total_sales = sum(total_sales)) %>%
+  ggplot (aes(x = Month, y = total_sales, group = 1, colour = Year)) +
+  scale_y_continuous(labels = scales::comma) +
+  geom_line() +
+  geom_point() +
+  facet_grid(~Year) +
+  theme_classic()+
+  labs (title = "Total Sales of each Month by Year", y = "Total Sales") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.y = element_text(angle = 90, vjust = 0.5))
+
+
+```
+
+
+
+```{r, fig.width= 12, fig.height=25}
+
+grouped_ggbetweenstats(
+  data = train_yearlysales,
+  x = Month,
+  y = total_sales,
+  type = "np",
+  grouping.var = Year,
+  plotgrid.args = list(nrow = 5)
+)
+
+```
+
+
+
+```{r}
+
+train_productfamily <- training_data %>%
+  group_by(date,family) %>%
+  summarise (total_sales = sum(sales)) %>%
+  ungroup()
+
+train_PF <- train_productfamily %>%
+  left_join (ts_oil_fill, by = "date")
+
+```
+
+We will check for correlation between oil prices and the different family items. 
+
+Based on the table below, we can identify that most family items have a negative correlation between oil prices and sales except for `lingerie` and `Home Appliances`. We will now check if these correlation are statistically significant using `ggscatterstats`.
+
+```{r}
+
+train_PF %>%
+  group_by(family) %>%
+  summarise (cor = cor(total_sales,dcoilwtico)) %>%
+  arrange(cor)
+
+```
+
+
+
+```{r, fig.width= 35, fig.height=30}
+
+  grouped_ggscatterstats(
+  data  = train_PF,
+  x     = total_sales,
+  y     = dcoilwtico,
+  grouping.var = family,
+  xlab  = "Total Sales",
+  ylab  = "Daily Oil Price",
+  type = "np",
+  ggplot.component = list(ggplot2::scale_y_continuous(breaks = seq(30, 100, 10), limits = (c(30, 100)))),
+  plotgrid.args    = list(nrow = 8)
+)
+
+
+```
+
+
+## Does the different City or State have different Sales Pattern?
+
+
+```{r}
+
+stores$store_nbr <- as.character(stores$store_nbr)
+training_data_stores <- training_data %>%
+  left_join(stores, by = "store_nbr")
+
+```
+
+
+```{r}
+
+
+training_data_stores %>%
+  group_by(date,state) %>%
+  summarise(sales = sum(sales)) %>%
+  ggplot( aes(x=date, y=sales, group=state, color=state)) +
+  geom_line() +
+  ggtitle("Total sales based on States") +
+  theme_classic() +
+  guides(colour=guide_legend(title = "State")) +
+  ylab("Total Sales") + xlab ("Date") +
+  scale_y_continuous(labels = scales::comma)
+
+```
+
+
+```{r, fig.width = 18}
+
+training_data_stores %>%
+  mutate(Month = month(date)) %>%
+  mutate (Year = year(date)) %>%
+  group_by(Month,Year,state) %>%
+  summarise(sales = sum(sales)) %>%
+  ggbetweenstats(
+    x = state,
+    y = sales,
+    type = "np",
+    pairwise.comparisons = FALSE
+
+  )
+
+
+```
+
+``` {r}
+
+holiday_local_new <- holiday %>%
+  filter (transferred == "FALSE") %>%
+  filter (locale != "National" & locale != "Regional") %>%
+  mutate(local_holiday = 1) %>%
+  rename ("city" = "locale_name") %>%
+  select(date, city, local_holiday)
+
+
+holiday_regional_new <- holiday %>%
+  filter (transferred == "FALSE") %>%
+  filter (locale != "National" & locale != "local") %>%
+  mutate(regional_holiday = 1) %>%
+  rename ("state" = "locale_name") %>%
+  select(date, state, regional_holiday)
+
+holiday_national_new <- holiday  %>%
+  filter (transferred == "FALSE") %>%
+  filter (locale != "local" & locale != "Regional") %>%
+  mutate (national_holiday = case_when(
+    type != "Event" ~ 1,
+    TRUE ~ 0
+  )) %>%
+  mutate (national_event = case_when(
+    type == "Event" ~ 1,
+    TRUE ~ 0
+  )) %>%
+  select(date, national_holiday,national_event)
+  
+  
+
+
+```
+
+```{r}
+
+finaldata <- training_data_stores %>%
+  left_join (ts_oil_fill, by = "date") %>%
+  left_join (holiday_local_new, by = c("date", "city")) %>%
+  left_join (holiday_regional_new, by = c("date", "state")) %>%
+  left_join (holiday_national_new, by = c("date"))
+
+```

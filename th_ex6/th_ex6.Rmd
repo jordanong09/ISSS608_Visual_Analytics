@@ -281,6 +281,7 @@ For the graph, we will use the The Fruchterman-Reingold layout algorithm and `se
 quantile_graph <- quantile(eigen_centrality(cgraph)$vector,
          probs = seq(0, 1, 1/10)
          )
+
 V(cgraph)$size = eigen_centrality(cgraph)$vector
 
 cgraph_aggregated <- delete_vertices(cgraph, V(cgraph)[size < quantile_graph[10]])
